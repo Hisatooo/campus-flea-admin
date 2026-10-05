@@ -570,17 +570,23 @@
     universities.forEach(function (uni) { el.uniList.appendChild(uniRow(uni)); });
   }
 
+  function spanWith(className, text) {
+    var el = document.createElement('span');
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
   function uniRow(uni) {
     var row = document.createElement('div');
     row.className = 'uni-row';
 
     var head = document.createElement('div');
     head.className = 'uni-row-head';
-    head.innerHTML =
-      '<span class="name">' + uni.name + '</span>' +
-      '<span class="meta">' + uni.type + '・' + uni.prefecture + '</span>' +
-      '<span class="pill">' + (uni.is_enabled ? '対応済み' : '未対応') + '</span>' +
-      '<span class="wish">' + uni.wish_count + '人</span>';
+    head.appendChild(spanWith('name', uni.name));
+    head.appendChild(spanWith('meta', uni.type + '・' + uni.prefecture));
+    head.appendChild(spanWith('pill', uni.is_enabled ? '対応済み' : '未対応'));
+    head.appendChild(spanWith('wish', uni.wish_count + '人'));
     head.addEventListener('click', function () { toggleEdit(row, uni); });
     row.appendChild(head);
     return row;
@@ -595,10 +601,12 @@
     openUniRowId = uni.id;
     var panel = document.createElement('div');
     panel.className = 'uni-edit';
+    // ラベル等の固定文言だけを innerHTML で組み、ユーザー由来になりうる値(ドメイン一覧)は
+    // 後から .value に代入する(属性文字列への直接埋め込みを避ける)。
     panel.innerHTML =
       '<label class="field">メールドメイン(カンマ区切り、例: waseda.jp, kyoto-u.ac.jp)</label>' +
-      '<input type="text" value="' + (uni.email_domains || []).join(', ') + '" />' +
-      '<label class="checkbox"><input type="checkbox" ' + (uni.is_enabled ? 'checked' : '') + ' /> 有効にする(ドメイン必須)</label>' +
+      '<input type="text" />' +
+      '<label class="checkbox"><input type="checkbox" /> 有効にする(ドメイン必須)</label>' +
       '<div class="error-banner" hidden></div>' +
       '<div class="btn-row"><button class="primary">保存</button></div>';
 
@@ -606,6 +614,8 @@
     var enabledInput = panel.querySelector('input[type="checkbox"]');
     var errorBanner = panel.querySelector('.error-banner');
     var saveBtn = panel.querySelector('button.primary');
+    domainsInput.value = (uni.email_domains || []).join(', ');
+    enabledInput.checked = !!uni.is_enabled;
 
     saveBtn.addEventListener('click', function () {
       var domains = domainsInput.value.split(',').map(function (d) { return d.trim(); }).filter(Boolean);
