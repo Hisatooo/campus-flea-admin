@@ -1,0 +1,459 @@
+<title>審査キュー</title>
+<style>
+  :root {
+    --bg: #faf8f5;
+    --surface: #ffffff;
+    --surface-2: #f2ede5;
+    --border: #e4dfd6;
+    --text: #2b2622;
+    --muted: #79706a;
+    --accent: #c2622b;
+    --accent-ink: #ffffff;
+    --danger: #b3362c;
+    --danger-ink: #ffffff;
+    --success: #3e7a4c;
+    --success-ink: #ffffff;
+    --focus: #c2622b;
+    --shadow: 0 1px 2px rgba(43, 38, 34, 0.06), 0 8px 24px -12px rgba(43, 38, 34, 0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1915;
+      --surface: #262220;
+      --surface-2: #2f2a26;
+      --border: #3a332c;
+      --text: #f2ede6;
+      --muted: #a89c8f;
+      --accent: #e08a4f;
+      --accent-ink: #1c1915;
+      --danger: #e2746a;
+      --danger-ink: #1c1915;
+      --success: #5fae72;
+      --success-ink: #1c1915;
+      --focus: #e08a4f;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1c1915;
+    --surface: #262220;
+    --surface-2: #2f2a26;
+    --border: #3a332c;
+    --text: #f2ede6;
+    --muted: #a89c8f;
+    --accent: #e08a4f;
+    --accent-ink: #1c1915;
+    --danger: #e2746a;
+    --danger-ink: #1c1915;
+    --success: #5fae72;
+    --success-ink: #1c1915;
+    --focus: #e08a4f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-inline: 16px;
+    padding-block: 28px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  button.link {
+    background: none; border: none; color: var(--accent); font: inherit; font-weight: 600;
+    cursor: pointer; padding: 4px 0; text-decoration: none;
+  }
+  button.link:hover { text-decoration: underline; }
+  button.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 20px;
+  }
+
+  label.field { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  input[type="password"], textarea {
+    width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  input[type="password"]:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px;
+  }
+  textarea { resize: vertical; min-height: 72px; }
+
+  button.primary, button.danger, button.ghost {
+    font: inherit; font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer; border: 1px solid transparent;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); }
+  button.primary:disabled, button.danger:disabled { opacity: 0.5; cursor: default; }
+  button.danger { background: var(--danger); color: var(--danger-ink); }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+  .error-banner {
+    background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+    color: var(--text); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-top: 14px;
+  }
+
+  .deal-list { display: flex; flex-direction: column; gap: 10px; }
+  .deal-row {
+    display: flex; align-items: center; gap: 14px; text-align: left; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; cursor: pointer; font: inherit; color: var(--text);
+    border-left: 4px solid var(--accent);
+  }
+  .deal-row:hover { background: var(--surface-2); }
+  .deal-row .price { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 74px; }
+  .deal-row .meta { flex: 1; min-width: 0; }
+  .deal-row .origin { font-size: 13px; color: var(--muted); }
+  .deal-row .expires { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
+  }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+
+  .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .detail-head h2 { font-size: 17px; margin: 0 0 4px; }
+  .parties { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .parties b { color: var(--text); }
+
+  .messages {
+    display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px;
+  }
+  .msg { max-width: 80%; padding: 7px 11px; border-radius: 12px; font-size: 13.5px; }
+  .msg .meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .msg.buyer { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .msg.seller { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 3px; }
+  .msg.seller .meta { color: color-mix(in srgb, var(--accent-ink) 70%, transparent); }
+
+  [hidden] { display: none !important; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid currentColor; border-top-color: transparent; animation: spin 0.7s linear infinite; vertical-align: -2px;
+  }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 1.6s; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>審査キュー</h1>
+      <div class="sub">審査中(disputed)の取引 — 完了・取消の判断</div>
+    </div>
+    <button class="link" id="changeSecretBtn" hidden>シークレットを変更</button>
+  </header>
+
+  <!-- 1. シークレット入力 -->
+  <section id="screen-secret" class="card">
+    <label class="field" for="secretInput">ADMIN_SECRET</label>
+    <input type="password" id="secretInput" autocomplete="off" spellcheck="false" placeholder="貼り付けてください" />
+    <div class="btn-row">
+      <button class="primary" id="secretSubmit">保存して一覧へ</button>
+    </div>
+    <div id="secretError" class="error-banner" hidden></div>
+    <p class="sub" style="margin-top:14px;">このブラウザだけに保存されます(sessionStorage)。タブを閉じると消えます。</p>
+  </section>
+
+  <!-- 2. 一覧 -->
+  <section id="screen-list" class="card" hidden>
+    <div id="listLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
+    <div id="listError" class="error-banner" hidden></div>
+    <div id="listEmpty" class="empty" hidden>審査中の取引はありません。</div>
+    <div id="dealList" class="deal-list"></div>
+    <div class="btn-row">
+      <button class="ghost" id="listRetry" hidden>再試行</button>
+      <button class="ghost" id="listRefresh">更新</button>
+    </div>
+  </section>
+
+  <!-- 3. 詳細 -->
+  <section id="screen-detail" class="card" hidden>
+    <button class="link" id="backToList">← 一覧へ戻る</button>
+    <div id="detailLoading" class="empty" style="margin-top:14px;"><span class="spinner"></span> 読み込み中…</div>
+    <div id="detailError" class="error-banner" hidden></div>
+    <div id="detailBody" hidden>
+      <div class="detail-head">
+        <div>
+          <h2 id="detailTitle"></h2>
+          <div class="sub" id="detailPrice"></div>
+        </div>
+        <span class="pill" id="detailOrigin"></span>
+      </div>
+      <div class="parties">
+        <div>購入者: <b id="detailBuyer"></b></div>
+        <div>出品者: <b id="detailSeller"></b></div>
+      </div>
+      <div class="messages" id="detailMessages"></div>
+      <label class="field" for="noteInput">判断の理由(必須・記録されます)</label>
+      <textarea id="noteInput" placeholder="例: チャットで受け渡しの合意を確認した"></textarea>
+      <div id="actionError" class="error-banner" hidden></div>
+      <div class="btn-row">
+        <button class="primary" id="completeBtn">完了にする</button>
+        <button class="danger" id="cancelBtn">取消にする</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var ADMIN_URL = 'https://mqoztajfxbqjctwhkxtw.supabase.co/functions/v1/admin';
+  var SS_KEY = 'unima_admin_secret';
+
+  var el = {
+    changeSecretBtn: document.getElementById('changeSecretBtn'),
+    screenSecret: document.getElementById('screen-secret'),
+    screenList: document.getElementById('screen-list'),
+    screenDetail: document.getElementById('screen-detail'),
+    secretInput: document.getElementById('secretInput'),
+    secretSubmit: document.getElementById('secretSubmit'),
+    secretError: document.getElementById('secretError'),
+    listLoading: document.getElementById('listLoading'),
+    listError: document.getElementById('listError'),
+    listEmpty: document.getElementById('listEmpty'),
+    dealList: document.getElementById('dealList'),
+    listRetry: document.getElementById('listRetry'),
+    listRefresh: document.getElementById('listRefresh'),
+    backToList: document.getElementById('backToList'),
+    detailLoading: document.getElementById('detailLoading'),
+    detailError: document.getElementById('detailError'),
+    detailBody: document.getElementById('detailBody'),
+    detailTitle: document.getElementById('detailTitle'),
+    detailPrice: document.getElementById('detailPrice'),
+    detailOrigin: document.getElementById('detailOrigin'),
+    detailBuyer: document.getElementById('detailBuyer'),
+    detailSeller: document.getElementById('detailSeller'),
+    detailMessages: document.getElementById('detailMessages'),
+    noteInput: document.getElementById('noteInput'),
+    actionError: document.getElementById('actionError'),
+    completeBtn: document.getElementById('completeBtn'),
+    cancelBtn: document.getElementById('cancelBtn'),
+  };
+
+  function getSecret() { try { return sessionStorage.getItem(SS_KEY) || ''; } catch (e) { return ''; } }
+  function setSecret(v) { try { sessionStorage.setItem(SS_KEY, v); } catch (e) {} }
+  function clearSecret() { try { sessionStorage.removeItem(SS_KEY); } catch (e) {} }
+
+  function show(screen) {
+    el.screenSecret.hidden = screen !== 'secret';
+    el.screenList.hidden = screen !== 'list';
+    el.screenDetail.hidden = screen !== 'detail';
+    el.changeSecretBtn.hidden = screen === 'secret';
+  }
+
+  function callAdmin(action, extra) {
+    var body = Object.assign({ action: action }, extra || {});
+    return fetch(ADMIN_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-secret': getSecret() },
+      body: JSON.stringify(body),
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        if (!res.ok) {
+          var err = new Error((json && json.error) || ('http_' + res.status));
+          err.status = res.status;
+          err.code = json && json.error;
+          throw err;
+        }
+        return json;
+      });
+    });
+  }
+
+  function yen(n) { return '¥' + Number(n).toLocaleString('ja-JP'); }
+
+  function formatExpires(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var diffMs = d.getTime() - Date.now();
+    var diffH = Math.round(diffMs / 3_600_000);
+    var dateText = d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (diffMs <= 0) return dateText + '(期限切れ)';
+    if (diffH < 24) return dateText + '(残り約' + diffH + '時間)';
+    return dateText + '(残り約' + Math.round(diffH / 24) + '日)';
+  }
+
+  function originLabel(deal) {
+    if (deal.disputed_by) return '購入者:問題あり';
+    if (deal.review_requested_by) return '出品者:審査申請';
+    return '審査中';
+  }
+
+  // ---- 1. シークレット ----
+  function trySecretAndLoadList(secret) {
+    el.secretError.hidden = true;
+    el.secretSubmit.disabled = true;
+    el.secretSubmit.textContent = '確認中…';
+    setSecret(secret);
+    callAdmin('list_reviews')
+      .then(function (json) {
+        show('list');
+        renderList(json.deals || []);
+      })
+      .catch(function (err) {
+        clearSecret();
+        el.secretError.hidden = false;
+        el.secretError.textContent = err.code === 'unauthorized'
+          ? 'ADMIN_SECRET が正しくありません。'
+          : '接続に失敗しました(' + err.message + ')。もう一度お試しください。';
+      })
+      .finally(function () {
+        el.secretSubmit.disabled = false;
+        el.secretSubmit.textContent = '保存して一覧へ';
+      });
+  }
+
+  el.secretSubmit.addEventListener('click', function () {
+    var v = el.secretInput.value.trim();
+    if (!v) return;
+    trySecretAndLoadList(v);
+  });
+  el.secretInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') el.secretSubmit.click();
+  });
+  el.changeSecretBtn.addEventListener('click', function () {
+    clearSecret();
+    el.secretInput.value = '';
+    el.secretError.hidden = true;
+    show('secret');
+  });
+
+  // ---- 2. 一覧 ----
+  function loadList() {
+    el.listLoading.hidden = false;
+    el.listError.hidden = true;
+    el.listRetry.hidden = true;
+    el.listEmpty.hidden = true;
+    el.dealList.innerHTML = '';
+    callAdmin('list_reviews')
+      .then(function (json) { renderList(json.deals || []); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.listError.hidden = false;
+        el.listError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+        el.listRetry.hidden = false;
+      })
+      .finally(function () { el.listLoading.hidden = true; });
+  }
+
+  function renderList(deals) {
+    el.dealList.innerHTML = '';
+    el.listEmpty.hidden = deals.length !== 0;
+    deals.forEach(function (deal) {
+      var row = document.createElement('button');
+      row.className = 'deal-row';
+      row.innerHTML =
+        '<span class="price">' + yen(deal.price_jpy) + '</span>' +
+        '<span class="meta"><span class="origin">' + originLabel(deal) + '</span></span>' +
+        '<span class="expires">' + formatExpires(deal.expires_at) + '</span>';
+      row.addEventListener('click', function () { openDetail(deal.id); });
+      el.dealList.appendChild(row);
+    });
+  }
+
+  el.listRetry.addEventListener('click', loadList);
+  el.listRefresh.addEventListener('click', loadList);
+  el.backToList.addEventListener('click', function () { show('list'); loadList(); });
+
+  // ---- 3. 詳細 ----
+  var currentDealId = null;
+
+  function openDetail(dealId) {
+    currentDealId = dealId;
+    show('detail');
+    el.detailLoading.hidden = false;
+    el.detailError.hidden = true;
+    el.detailBody.hidden = true;
+    el.actionError.hidden = true;
+    el.noteInput.value = '';
+    callAdmin('review_detail', { deal_id: dealId })
+      .then(function (json) {
+        if (!json.deal) {
+          el.detailError.hidden = false;
+          el.detailError.textContent = 'この取引は既に処理済みです。一覧に戻って更新してください。';
+          return;
+        }
+        renderDetail(json.deal, json.messages || []);
+        el.detailBody.hidden = false;
+      })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.detailError.hidden = false;
+        el.detailError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { el.detailLoading.hidden = true; });
+  }
+
+  function renderDetail(deal, messages) {
+    el.detailTitle.textContent = deal.listing_title || '(出品タイトル不明)';
+    el.detailPrice.textContent = yen(deal.price_jpy) + ' / 期限 ' + formatExpires(deal.expires_at);
+    el.detailOrigin.textContent = originLabel(deal);
+    el.detailBuyer.textContent = deal.buyer_display_name || '(表示名未設定)';
+    el.detailSeller.textContent = deal.seller_display_name || '(表示名未設定)';
+
+    el.detailMessages.innerHTML = '';
+    if (messages.length === 0) {
+      el.detailMessages.innerHTML = '<div class="sub">メッセージはありません。</div>';
+    }
+    messages.forEach(function (m) {
+      var who = m.sender_id === deal.buyer_id ? 'buyer' : 'seller';
+      var div = document.createElement('div');
+      div.className = 'msg ' + who;
+      var body = document.createElement('div');
+      body.textContent = m.body;
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = (who === 'buyer' ? '購入者' : '出品者') + ' · ' +
+        new Date(m.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      div.appendChild(body);
+      div.appendChild(meta);
+      el.detailMessages.appendChild(div);
+    });
+    el.detailMessages.scrollTop = el.detailMessages.scrollHeight;
+  }
+
+  function submitDecision(action) {
+    var note = el.noteInput.value.trim();
+    if (!note) { el.noteInput.focus(); return; }
+    el.actionError.hidden = true;
+    el.completeBtn.disabled = true;
+    el.cancelBtn.disabled = true;
+    var btn = action === 'complete' ? el.completeBtn : el.cancelBtn;
+    var originalText = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> 送信中…';
+    callAdmin(action, { deal_id: currentDealId, note: note })
+      .then(function () { show('list'); loadList(); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.actionError.hidden = false;
+        el.actionError.textContent = '失敗しました(' + err.message + ')。' +
+          (err.code === 'deal_invalid_state' ? ' 少し待ってからもう一度お試しください。' : '');
+      })
+      .finally(function () {
+        el.completeBtn.disabled = false;
+        el.cancelBtn.disabled = false;
+        btn.textContent = originalText;
+      });
+  }
+
+  el.completeBtn.addEventListener('click', function () { submitDecision('complete'); });
+  el.cancelBtn.addEventListener('click', function () { submitDecision('cancel'); });
+
+  // ---- 起動 ----
+  var saved = getSecret();
+  if (saved) { trySecretAndLoadList(saved); } else { show('secret'); el.secretInput.focus(); }
+})();
+</script>
