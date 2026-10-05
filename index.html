@@ -1,4 +1,4 @@
-<title>審査キュー</title>
+<title>運営ツール</title>
 <style>
   :root {
     --bg: #faf8f5;
@@ -140,6 +140,26 @@
   .msg.seller { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 3px; }
   .msg.seller .meta { color: color-mix(in srgb, var(--accent-ink) 70%, transparent); }
 
+  nav.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  nav.tabs button {
+    font: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+  }
+  nav.tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .uni-list { display: flex; flex-direction: column; gap: 10px; }
+  .uni-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .uni-row-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .uni-row-head .name { font-weight: 600; flex: 1; min-width: 0; }
+  .uni-row-head .meta { font-size: 12px; color: var(--muted); }
+  .uni-row-head .wish { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 48px; text-align: right; }
+  .uni-edit { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .uni-edit input[type="text"] {
+    width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  label.checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; cursor: pointer; }
+
   [hidden] { display: none !important; }
   .spinner {
     display: inline-block; width: 14px; height: 14px; border-radius: 50%;
@@ -152,11 +172,16 @@
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>審査キュー</h1>
-      <div class="sub">審査中(disputed)の取引 — 完了・取消の判断</div>
+      <h1 id="pageTitle">審査キュー</h1>
+      <div class="sub" id="pageSub">審査中(disputed)の取引 — 完了・取消の判断</div>
     </div>
     <button class="link" id="changeSecretBtn" hidden>シークレットを変更</button>
   </header>
+
+  <nav class="tabs" id="mainNav" hidden>
+    <button id="navReview" class="active">審査キュー</button>
+    <button id="navUniversities">大学の要望</button>
+  </nav>
 
   <!-- 1. シークレット入力 / Googleログイン -->
   <section id="screen-secret" class="card">
@@ -210,6 +235,18 @@
       </div>
     </div>
   </section>
+
+  <!-- 4. 大学の要望 -->
+  <section id="screen-uni" class="card" hidden>
+    <div id="uniLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
+    <div id="uniError" class="error-banner" hidden></div>
+    <div id="uniEmpty" class="empty" hidden>大学のデータがありません。</div>
+    <div id="uniList" class="uni-list"></div>
+    <div class="btn-row">
+      <button class="ghost" id="uniRetry" hidden>再試行</button>
+      <button class="ghost" id="uniRefresh">更新</button>
+    </div>
+  </section>
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -221,10 +258,22 @@
   var SS_KEY = 'unima_admin_cred'; // { type: 'secret' | 'google', value: string }
 
   var el = {
+    pageTitle: document.getElementById('pageTitle'),
+    pageSub: document.getElementById('pageSub'),
+    mainNav: document.getElementById('mainNav'),
+    navReview: document.getElementById('navReview'),
+    navUniversities: document.getElementById('navUniversities'),
     changeSecretBtn: document.getElementById('changeSecretBtn'),
     screenSecret: document.getElementById('screen-secret'),
     screenList: document.getElementById('screen-list'),
     screenDetail: document.getElementById('screen-detail'),
+    screenUni: document.getElementById('screen-uni'),
+    uniLoading: document.getElementById('uniLoading'),
+    uniError: document.getElementById('uniError'),
+    uniEmpty: document.getElementById('uniEmpty'),
+    uniList: document.getElementById('uniList'),
+    uniRetry: document.getElementById('uniRetry'),
+    uniRefresh: document.getElementById('uniRefresh'),
     secretInput: document.getElementById('secretInput'),
     secretSubmit: document.getElementById('secretSubmit'),
     secretError: document.getElementById('secretError'),
@@ -258,8 +307,22 @@
     el.screenSecret.hidden = screen !== 'secret';
     el.screenList.hidden = screen !== 'list';
     el.screenDetail.hidden = screen !== 'detail';
+    el.screenUni.hidden = screen !== 'uni';
     el.changeSecretBtn.hidden = screen === 'secret';
+    el.mainNav.hidden = screen === 'secret';
+    el.navReview.classList.toggle('active', screen === 'list' || screen === 'detail');
+    el.navUniversities.classList.toggle('active', screen === 'uni');
+    if (screen === 'uni') {
+      el.pageTitle.textContent = '大学の要望';
+      el.pageSub.textContent = '要望が多い順。メールドメインを設定すると有効化できます。';
+    } else if (screen !== 'secret') {
+      el.pageTitle.textContent = '審査キュー';
+      el.pageSub.textContent = '審査中(disputed)の取引 — 完了・取消の判断';
+    }
   }
+
+  el.navReview.addEventListener('click', function () { show('list'); loadList(); });
+  el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
 
   function authHeaders() {
     var cred = getCred();
@@ -480,6 +543,94 @@
 
   el.completeBtn.addEventListener('click', function () { submitDecision('complete'); });
   el.cancelBtn.addEventListener('click', function () { submitDecision('cancel'); });
+
+  // ---- 4. 大学の要望 ----
+  var openUniRowId = null; // 一度に1件だけ編集パネルを開く
+
+  function loadUniversities() {
+    el.uniLoading.hidden = false;
+    el.uniError.hidden = true;
+    el.uniRetry.hidden = true;
+    el.uniEmpty.hidden = true;
+    el.uniList.innerHTML = '';
+    callAdmin('list_university_wishes')
+      .then(function (json) { renderUniversities(json.universities || []); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        el.uniError.hidden = false;
+        el.uniError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+        el.uniRetry.hidden = false;
+      })
+      .finally(function () { el.uniLoading.hidden = true; });
+  }
+
+  function renderUniversities(universities) {
+    el.uniList.innerHTML = '';
+    el.uniEmpty.hidden = universities.length !== 0;
+    universities.forEach(function (uni) { el.uniList.appendChild(uniRow(uni)); });
+  }
+
+  function uniRow(uni) {
+    var row = document.createElement('div');
+    row.className = 'uni-row';
+
+    var head = document.createElement('div');
+    head.className = 'uni-row-head';
+    head.innerHTML =
+      '<span class="name">' + uni.name + '</span>' +
+      '<span class="meta">' + uni.type + '・' + uni.prefecture + '</span>' +
+      '<span class="pill">' + (uni.is_enabled ? '対応済み' : '未対応') + '</span>' +
+      '<span class="wish">' + uni.wish_count + '人</span>';
+    head.addEventListener('click', function () { toggleEdit(row, uni); });
+    row.appendChild(head);
+    return row;
+  }
+
+  function toggleEdit(row, uni) {
+    var existing = row.querySelector('.uni-edit');
+    if (existing) { existing.remove(); openUniRowId = null; return; }
+    // 他に開いているパネルがあれば閉じる
+    document.querySelectorAll('.uni-edit').forEach(function (p) { p.remove(); });
+
+    openUniRowId = uni.id;
+    var panel = document.createElement('div');
+    panel.className = 'uni-edit';
+    panel.innerHTML =
+      '<label class="field">メールドメイン(カンマ区切り、例: waseda.jp, kyoto-u.ac.jp)</label>' +
+      '<input type="text" value="' + (uni.email_domains || []).join(', ') + '" />' +
+      '<label class="checkbox"><input type="checkbox" ' + (uni.is_enabled ? 'checked' : '') + ' /> 有効にする(ドメイン必須)</label>' +
+      '<div class="error-banner" hidden></div>' +
+      '<div class="btn-row"><button class="primary">保存</button></div>';
+
+    var domainsInput = panel.querySelector('input[type="text"]');
+    var enabledInput = panel.querySelector('input[type="checkbox"]');
+    var errorBanner = panel.querySelector('.error-banner');
+    var saveBtn = panel.querySelector('button.primary');
+
+    saveBtn.addEventListener('click', function () {
+      var domains = domainsInput.value.split(',').map(function (d) { return d.trim(); }).filter(Boolean);
+      errorBanner.hidden = true;
+      saveBtn.disabled = true;
+      var originalText = saveBtn.textContent;
+      saveBtn.innerHTML = '<span class="spinner"></span> 保存中…';
+      callAdmin('set_university_domains', { university_id: uni.id, email_domains: domains, is_enabled: enabledInput.checked })
+        .then(function () { loadUniversities(); })
+        .catch(function (err) {
+          if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+          errorBanner.hidden = false;
+          errorBanner.textContent = err.code === 'enabled_requires_domains'
+            ? 'ドメインを設定してからでないと有効化できません。'
+            : '保存に失敗しました(' + err.message + ')。';
+          saveBtn.disabled = false;
+          saveBtn.textContent = originalText;
+        });
+    });
+
+    row.appendChild(panel);
+  }
+
+  el.uniRetry.addEventListener('click', loadUniversities);
+  el.uniRefresh.addEventListener('click', loadUniversities);
 
   // ---- 起動 ----
   var saved = getCred();
