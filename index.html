@@ -89,6 +89,9 @@
   }
   textarea { resize: vertical; min-height: 72px; }
 
+  .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--muted); font-size: 12px; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
   button.primary, button.danger, button.ghost {
     font: inherit; font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer; border: 1px solid transparent;
   }
@@ -155,8 +158,10 @@
     <button class="link" id="changeSecretBtn" hidden>シークレットを変更</button>
   </header>
 
-  <!-- 1. シークレット入力 -->
+  <!-- 1. シークレット入力 / Googleログイン -->
   <section id="screen-secret" class="card">
+    <div id="googleButton"></div>
+    <div class="divider"><span>または</span></div>
     <label class="field" for="secretInput">ADMIN_SECRET</label>
     <input type="password" id="secretInput" autocomplete="off" spellcheck="false" placeholder="貼り付けてください" />
     <div class="btn-row">
@@ -207,11 +212,13 @@
   </section>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function () {
   'use strict';
   var ADMIN_URL = 'https://mqoztajfxbqjctwhkxtw.supabase.co/functions/v1/admin';
-  var SS_KEY = 'unima_admin_secret';
+  var GOOGLE_CLIENT_ID = '94187743981-rgoe7i43m9hud8flhivn1fl00kvsrgl6.apps.googleusercontent.com';
+  var SS_KEY = 'unima_admin_cred'; // { type: 'secret' | 'google', value: string }
 
   var el = {
     changeSecretBtn: document.getElementById('changeSecretBtn'),
@@ -243,9 +250,9 @@
     cancelBtn: document.getElementById('cancelBtn'),
   };
 
-  function getSecret() { try { return sessionStorage.getItem(SS_KEY) || ''; } catch (e) { return ''; } }
-  function setSecret(v) { try { sessionStorage.setItem(SS_KEY, v); } catch (e) {} }
-  function clearSecret() { try { sessionStorage.removeItem(SS_KEY); } catch (e) {} }
+  function getCred() { try { return JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); } catch (e) { return null; } }
+  function setCred(type, value) { try { sessionStorage.setItem(SS_KEY, JSON.stringify({ type: type, value: value })); } catch (e) {} }
+  function clearCred() { try { sessionStorage.removeItem(SS_KEY); } catch (e) {} }
 
   function show(screen) {
     el.screenSecret.hidden = screen !== 'secret';
@@ -254,11 +261,19 @@
     el.changeSecretBtn.hidden = screen === 'secret';
   }
 
+  function authHeaders() {
+    var cred = getCred();
+    if (!cred) return {};
+    if (cred.type === 'google') return { authorization: 'Bearer ' + cred.value };
+    return { 'x-admin-secret': cred.value };
+  }
+
   function callAdmin(action, extra) {
     var body = Object.assign({ action: action }, extra || {});
+    var headers = Object.assign({ 'content-type': 'application/json' }, authHeaders());
     return fetch(ADMIN_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-admin-secret': getSecret() },
+      headers: headers,
       body: JSON.stringify(body),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
@@ -292,44 +307,58 @@
     return '審査中';
   }
 
-  // ---- 1. シークレット ----
-  function trySecretAndLoadList(secret) {
+  // ---- 1. ログイン(ADMIN_SECRET または Google) ----
+  function tryCredAndLoadList(type, value, busyBtn, busyText, idleText) {
     el.secretError.hidden = true;
-    el.secretSubmit.disabled = true;
-    el.secretSubmit.textContent = '確認中…';
-    setSecret(secret);
+    if (busyBtn) { busyBtn.disabled = true; busyBtn.textContent = busyText; }
+    setCred(type, value);
     callAdmin('list_reviews')
       .then(function (json) {
         show('list');
         renderList(json.deals || []);
       })
       .catch(function (err) {
-        clearSecret();
+        clearCred();
         el.secretError.hidden = false;
         el.secretError.textContent = err.code === 'unauthorized'
-          ? 'ADMIN_SECRET が正しくありません。'
+          ? (type === 'google' ? 'このGoogleアカウントではログインできません。' : 'ADMIN_SECRET が正しくありません。')
           : '接続に失敗しました(' + err.message + ')。もう一度お試しください。';
       })
       .finally(function () {
-        el.secretSubmit.disabled = false;
-        el.secretSubmit.textContent = '保存して一覧へ';
+        if (busyBtn) { busyBtn.disabled = false; busyBtn.textContent = idleText; }
       });
   }
 
   el.secretSubmit.addEventListener('click', function () {
     var v = el.secretInput.value.trim();
     if (!v) return;
-    trySecretAndLoadList(v);
+    tryCredAndLoadList('secret', v, el.secretSubmit, '確認中…', '保存して一覧へ');
   });
   el.secretInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') el.secretSubmit.click();
   });
   el.changeSecretBtn.addEventListener('click', function () {
-    clearSecret();
+    clearCred();
     el.secretInput.value = '';
     el.secretError.hidden = true;
     show('secret');
   });
+
+  function handleGoogleCredential(response) {
+    tryCredAndLoadList('google', response.credential, null, '', '');
+  }
+  if (window.google && google.accounts && google.accounts.id) {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+    google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
+  } else {
+    // gsi/client はまだ async ロード中のことがある。読み込み完了を少し待って再試行する。
+    window.addEventListener('load', function () {
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+        google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
+      }
+    });
+  }
 
   // ---- 2. 一覧 ----
   function loadList() {
@@ -341,7 +370,7 @@
     callAdmin('list_reviews')
       .then(function (json) { renderList(json.deals || []); })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
         el.listError.hidden = false;
         el.listError.textContent = '読み込みに失敗しました(' + err.message + ')。';
         el.listRetry.hidden = false;
@@ -390,7 +419,7 @@
         el.detailBody.hidden = false;
       })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
         el.detailError.hidden = false;
         el.detailError.textContent = '読み込みに失敗しました(' + err.message + ')。';
       })
@@ -437,7 +466,7 @@
     callAdmin(action, { deal_id: currentDealId, note: note })
       .then(function () { show('list'); loadList(); })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
         el.actionError.hidden = false;
         el.actionError.textContent = '失敗しました(' + err.message + ')。' +
           (err.code === 'deal_invalid_state' ? ' 少し待ってからもう一度お試しください。' : '');
@@ -453,7 +482,7 @@
   el.cancelBtn.addEventListener('click', function () { submitDecision('cancel'); });
 
   // ---- 起動 ----
-  var saved = getSecret();
-  if (saved) { trySecretAndLoadList(saved); } else { show('secret'); el.secretInput.focus(); }
+  var saved = getCred();
+  if (saved) { tryCredAndLoadList(saved.type, saved.value, null, '', ''); } else { show('secret'); el.secretInput.focus(); }
 })();
 </script>
