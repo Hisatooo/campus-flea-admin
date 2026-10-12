@@ -74,6 +74,18 @@
   button.link:hover { text-decoration: underline; }
   button.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab {
+    font: inherit; font-weight: 700; background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--muted); padding: 8px 14px; cursor: pointer;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count {
+    display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 999px;
+    background: var(--surface-2); color: var(--muted);
+  }
+  .tab.active .count { background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent); }
+
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: var(--shadow); padding: 20px;
@@ -89,9 +101,6 @@
   }
   textarea { resize: vertical; min-height: 72px; }
 
-  .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--muted); font-size: 12px; }
-  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
   button.primary, button.danger, button.ghost {
     font: inherit; font-weight: 700; border-radius: 8px; padding: 10px 18px; cursor: pointer; border: 1px solid transparent;
   }
@@ -104,6 +113,11 @@
   .error-banner {
     background: color-mix(in srgb, var(--danger) 14%, var(--surface));
     border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+    color: var(--text); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-top: 14px;
+  }
+  .notice-banner {
+    background: color-mix(in srgb, var(--success) 14%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
     color: var(--text); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-top: 14px;
   }
 
@@ -123,12 +137,22 @@
     display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
     background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
   }
+  .pill.warn { background: color-mix(in srgb, var(--danger) 16%, var(--surface-2)); color: var(--danger); }
+  .pill.todo { background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  .pill.ok { background: color-mix(in srgb, var(--success) 16%, var(--surface-2)); color: var(--success); }
+  .deal-row.done { border-left-color: var(--border); }
   .empty { color: var(--muted); text-align: center; padding: 40px 0; }
 
   .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
   .detail-head h2 { font-size: 17px; margin: 0 0 4px; }
   .parties { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 16px; }
   .parties b { color: var(--text); }
+
+  .report-box {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px;
+    font-size: 13.5px;
+  }
+  .report-box .reason { font-weight: 700; }
 
   .messages {
     display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto;
@@ -140,12 +164,15 @@
   .msg.seller { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 3px; }
   .msg.seller .meta { color: color-mix(in srgb, var(--accent-ink) 70%, transparent); }
 
-  nav.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-  nav.tabs button {
+  .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--muted); font-size: 12px; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  nav.main-nav { display: flex; gap: 8px; margin-bottom: 16px; }
+  nav.main-nav button {
     font: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 999px;
     border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
   }
-  nav.tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  nav.main-nav button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
   .uni-list { display: flex; flex-direction: column; gap: 10px; }
   .uni-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
@@ -178,7 +205,7 @@
     <button class="link" id="changeSecretBtn" hidden>シークレットを変更</button>
   </header>
 
-  <nav class="tabs" id="mainNav" hidden>
+  <nav class="main-nav" id="mainNav" hidden>
     <button id="navReview" class="active">審査キュー</button>
     <button id="navUniversities">大学の要望</button>
   </nav>
@@ -196,11 +223,17 @@
     <p class="sub" style="margin-top:14px;">このブラウザだけに保存されます(sessionStorage)。タブを閉じると消えます。</p>
   </section>
 
-  <!-- 2. 一覧 -->
+  <!-- 2. 一覧(タブ切り替え) -->
   <section id="screen-list" class="card" hidden>
+    <div class="tabs">
+      <button class="tab active" id="tabReviews" data-tab="reviews">審査中の取引<span class="count" id="countReviews"></span></button>
+      <button class="tab" id="tabReports" data-tab="reports">取引後の問題報告<span class="count" id="countReports"></span></button>
+      <button class="tab" id="tabCancels" data-tab="cancels">キャンセル<span class="count" id="countCancels"></span></button>
+    </div>
+
     <div id="listLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
     <div id="listError" class="error-banner" hidden></div>
-    <div id="listEmpty" class="empty" hidden>審査中の取引はありません。</div>
+    <div id="listEmpty" class="empty" hidden></div>
     <div id="dealList" class="deal-list"></div>
     <div class="btn-row">
       <button class="ghost" id="listRetry" hidden>再試行</button>
@@ -208,7 +241,7 @@
     </div>
   </section>
 
-  <!-- 3. 詳細 -->
+  <!-- 3a. 審査中の取引の詳細 -->
   <section id="screen-detail" class="card" hidden>
     <button class="link" id="backToList">← 一覧へ戻る</button>
     <div id="detailLoading" class="empty" style="margin-top:14px;"><span class="spinner"></span> 読み込み中…</div>
@@ -236,6 +269,77 @@
     </div>
   </section>
 
+  <!-- 3c. キャンセルの申請の詳細(審査待ちなら、承認・却下) -->
+  <section id="screen-cancel-detail" class="card" hidden>
+    <button class="link" id="backToListFromCancel">← 一覧へ戻る</button>
+    <div id="cancelDetailLoading" class="empty" style="margin-top:14px;"><span class="spinner"></span> 読み込み中…</div>
+    <div id="cancelDetailError" class="error-banner" hidden></div>
+    <div id="cancelDetailBody" hidden>
+      <div class="detail-head">
+        <div>
+          <h2 id="cancelDetailTitle"></h2>
+          <div class="sub" id="cancelDetailPrice"></div>
+        </div>
+        <span class="pill" id="cancelDetailBy"></span>
+      </div>
+      <div class="parties">
+        <div>購入者: <b id="cancelDetailBuyer"></b></div>
+        <div>出品者: <b id="cancelDetailSeller"></b></div>
+      </div>
+      <div class="report-box">
+        <div class="reason" id="cancelReason"></div>
+        <div id="cancelDetailText" style="white-space:pre-wrap;"></div>
+        <div class="sub" id="cancelCreatedAt" style="margin-top:6px;"></div>
+        <div class="sub" id="cancelHistory"></div>
+        <div class="sub" id="cancelDecidedAt"></div>
+      </div>
+      <div class="messages" id="cancelMessages"></div>
+      <div id="cancelDecision" hidden>
+        <label class="field" for="cancelNoteInput">判断の理由(必須・記録されます)</label>
+        <textarea id="cancelNoteInput" placeholder="例: チャットで、3日間返信がないことを確認した"></textarea>
+        <p class="sub" style="margin:10px 0 0;">承認すると、取引がキャンセルされ、双方に通知され、与信が解放されます。却下は、申請した人にだけ通知され、取引はそのまま続きます。</p>
+        <div id="cancelActionError" class="error-banner" hidden></div>
+        <div class="btn-row">
+          <button class="danger" id="approveCancelBtn">承認する(取引をキャンセル)</button>
+          <button class="ghost" id="rejectCancelBtn">却下する(取引は続く)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3b. 事後問題報告の詳細 -->
+  <section id="screen-report-detail" class="card" hidden>
+    <button class="link" id="backToListFromReport">← 一覧へ戻る</button>
+    <div id="reportDetailLoading" class="empty" style="margin-top:14px;"><span class="spinner"></span> 読み込み中…</div>
+    <div id="reportDetailError" class="error-banner" hidden></div>
+    <div id="reportDetailBody" hidden>
+      <div class="detail-head">
+        <div>
+          <h2 id="reportDetailTitle"></h2>
+          <div class="sub" id="reportDetailPrice"></div>
+        </div>
+        <span class="pill" id="reportDetailWindow"></span>
+      </div>
+      <div class="parties">
+        <div>購入者: <b id="reportDetailBuyer"></b></div>
+        <div>出品者: <b id="reportDetailSeller"></b></div>
+      </div>
+      <div class="report-box">
+        <div class="reason" id="reportReason"></div>
+        <div id="reportDetail"></div>
+        <div class="sub" id="reportCreatedAt" style="margin-top:6px;"></div>
+      </div>
+      <div class="messages" id="reportMessages"></div>
+      <label class="field" for="reportNoteInput">判断の理由(返金の場合のみ必須・記録されます)</label>
+      <textarea id="reportNoteInput" placeholder="例: 偽物であることをメッセージと写真で確認した"></textarea>
+      <div id="reportActionError" class="error-banner" hidden></div>
+      <div class="btn-row">
+        <button class="danger" id="refundBtn">返金する(手数料を除いた額)</button>
+        <button class="ghost" id="dismissBtn">問題なしとして却下</button>
+      </div>
+    </div>
+  </section>
+
   <!-- 4. 大学の要望 -->
   <section id="screen-uni" class="card" hidden>
     <div id="uniLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
@@ -256,17 +360,14 @@
   var ADMIN_URL = 'https://mqoztajfxbqjctwhkxtw.supabase.co/functions/v1/admin';
   var GOOGLE_CLIENT_ID = '94187743981-rgoe7i43m9hud8flhivn1fl00kvsrgl6.apps.googleusercontent.com';
   var SS_KEY = 'unima_admin_cred'; // { type: 'secret' | 'google', value: string }
+  var activeTab = 'reviews';
 
   var el = {
+    changeSecretBtn: document.getElementById('changeSecretBtn'),
     pageTitle: document.getElementById('pageTitle'),
-    pageSub: document.getElementById('pageSub'),
     mainNav: document.getElementById('mainNav'),
     navReview: document.getElementById('navReview'),
     navUniversities: document.getElementById('navUniversities'),
-    changeSecretBtn: document.getElementById('changeSecretBtn'),
-    screenSecret: document.getElementById('screen-secret'),
-    screenList: document.getElementById('screen-list'),
-    screenDetail: document.getElementById('screen-detail'),
     screenUni: document.getElementById('screen-uni'),
     uniLoading: document.getElementById('uniLoading'),
     uniError: document.getElementById('uniError'),
@@ -274,9 +375,18 @@
     uniList: document.getElementById('uniList'),
     uniRetry: document.getElementById('uniRetry'),
     uniRefresh: document.getElementById('uniRefresh'),
+    pageSub: document.getElementById('pageSub'),
+    screenSecret: document.getElementById('screen-secret'),
+    screenList: document.getElementById('screen-list'),
+    screenDetail: document.getElementById('screen-detail'),
+    screenReportDetail: document.getElementById('screen-report-detail'),
     secretInput: document.getElementById('secretInput'),
     secretSubmit: document.getElementById('secretSubmit'),
     secretError: document.getElementById('secretError'),
+    tabReviews: document.getElementById('tabReviews'),
+    tabReports: document.getElementById('tabReports'),
+    countReviews: document.getElementById('countReviews'),
+    countReports: document.getElementById('countReports'),
     listLoading: document.getElementById('listLoading'),
     listError: document.getElementById('listError'),
     listEmpty: document.getElementById('listEmpty'),
@@ -297,32 +407,52 @@
     actionError: document.getElementById('actionError'),
     completeBtn: document.getElementById('completeBtn'),
     cancelBtn: document.getElementById('cancelBtn'),
+    backToListFromReport: document.getElementById('backToListFromReport'),
+    reportDetailLoading: document.getElementById('reportDetailLoading'),
+    reportDetailError: document.getElementById('reportDetailError'),
+    reportDetailBody: document.getElementById('reportDetailBody'),
+    reportDetailTitle: document.getElementById('reportDetailTitle'),
+    reportDetailPrice: document.getElementById('reportDetailPrice'),
+    reportDetailWindow: document.getElementById('reportDetailWindow'),
+    reportDetailBuyer: document.getElementById('reportDetailBuyer'),
+    reportDetailSeller: document.getElementById('reportDetailSeller'),
+    reportReason: document.getElementById('reportReason'),
+    reportDetail: document.getElementById('reportDetail'),
+    reportCreatedAt: document.getElementById('reportCreatedAt'),
+    reportMessages: document.getElementById('reportMessages'),
+    reportNoteInput: document.getElementById('reportNoteInput'),
+    reportActionError: document.getElementById('reportActionError'),
+    refundBtn: document.getElementById('refundBtn'),
+    dismissBtn: document.getElementById('dismissBtn'),
+    tabCancels: document.getElementById('tabCancels'),
+    countCancels: document.getElementById('countCancels'),
+    screenCancelDetail: document.getElementById('screen-cancel-detail'),
+    backToListFromCancel: document.getElementById('backToListFromCancel'),
+    cancelDetailLoading: document.getElementById('cancelDetailLoading'),
+    cancelDetailError: document.getElementById('cancelDetailError'),
+    cancelDetailBody: document.getElementById('cancelDetailBody'),
+    cancelDetailTitle: document.getElementById('cancelDetailTitle'),
+    cancelDetailPrice: document.getElementById('cancelDetailPrice'),
+    cancelDetailBy: document.getElementById('cancelDetailBy'),
+    cancelDetailBuyer: document.getElementById('cancelDetailBuyer'),
+    cancelDetailSeller: document.getElementById('cancelDetailSeller'),
+    cancelReason: document.getElementById('cancelReason'),
+    cancelDetailText: document.getElementById('cancelDetailText'),
+    cancelCreatedAt: document.getElementById('cancelCreatedAt'),
+    cancelHistory: document.getElementById('cancelHistory'),
+    cancelMessages: document.getElementById('cancelMessages'),
+    cancelDecidedAt: document.getElementById('cancelDecidedAt'),
+    cancelDecision: document.getElementById('cancelDecision'),
+    cancelNoteInput: document.getElementById('cancelNoteInput'),
+    cancelActionError: document.getElementById('cancelActionError'),
+    approveCancelBtn: document.getElementById('approveCancelBtn'),
+    rejectCancelBtn: document.getElementById('rejectCancelBtn'),
   };
 
   function getCred() { try { return JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); } catch (e) { return null; } }
   function setCred(type, value) { try { sessionStorage.setItem(SS_KEY, JSON.stringify({ type: type, value: value })); } catch (e) {} }
   function clearCred() { try { sessionStorage.removeItem(SS_KEY); } catch (e) {} }
-
-  function show(screen) {
-    el.screenSecret.hidden = screen !== 'secret';
-    el.screenList.hidden = screen !== 'list';
-    el.screenDetail.hidden = screen !== 'detail';
-    el.screenUni.hidden = screen !== 'uni';
-    el.changeSecretBtn.hidden = screen === 'secret';
-    el.mainNav.hidden = screen === 'secret';
-    el.navReview.classList.toggle('active', screen === 'list' || screen === 'detail');
-    el.navUniversities.classList.toggle('active', screen === 'uni');
-    if (screen === 'uni') {
-      el.pageTitle.textContent = '大学の要望';
-      el.pageSub.textContent = '要望が多い順。メールドメインを設定すると有効化できます。';
-    } else if (screen !== 'secret') {
-      el.pageTitle.textContent = '審査キュー';
-      el.pageSub.textContent = '審査中(disputed)の取引 — 完了・取消の判断';
-    }
-  }
-
-  el.navReview.addEventListener('click', function () { show('list'); loadList(); });
-  el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
+  var clearSecret = clearCred;
 
   function authHeaders() {
     var cred = getCred();
@@ -331,12 +461,34 @@
     return { 'x-admin-secret': cred.value };
   }
 
+  function show(screen) {
+    el.screenSecret.hidden = screen !== 'secret';
+    el.screenList.hidden = screen !== 'list';
+    el.screenDetail.hidden = screen !== 'detail';
+    el.screenReportDetail.hidden = screen !== 'report-detail';
+    el.screenCancelDetail.hidden = screen !== 'cancel-detail';
+    el.changeSecretBtn.hidden = screen === 'secret';
+    el.screenUni.hidden = screen !== 'uni';
+    el.mainNav.hidden = screen === 'secret';
+    el.navUniversities.classList.toggle('active', screen === 'uni');
+    el.navReview.classList.toggle('active', screen !== 'uni');
+    if (screen === 'uni') {
+      el.pageTitle.textContent = '大学の要望';
+      el.pageSub.textContent = '要望が多い順。メールドメインを設定すると有効化できます。';
+    } else if (screen !== 'secret') {
+      el.pageTitle.textContent = '審査キュー';
+      el.pageSub.textContent = SUBTITLES[activeTab];
+    }
+  }
+
+  el.navReview.addEventListener('click', function () { show('list'); renderActiveTab(); });
+  el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
+
   function callAdmin(action, extra) {
     var body = Object.assign({ action: action }, extra || {});
-    var headers = Object.assign({ 'content-type': 'application/json' }, authHeaders());
     return fetch(ADMIN_URL, {
       method: 'POST',
-      headers: headers,
+      headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()),
       body: JSON.stringify(body),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
@@ -364,76 +516,130 @@
     return dateText + '(残り約' + Math.round(diffH / 24) + '日)';
   }
 
+  // 取引完了(captured_at)から72時間後が、返金受付の締切。
+  function formatRefundWindow(capturedAtIso) {
+    if (!capturedAtIso) return { text: '完了日時不明', closed: true };
+    var deadline = new Date(capturedAtIso).getTime() + 72 * 3_600_000;
+    var diffMs = deadline - Date.now();
+    var dateText = new Date(deadline).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (diffMs <= 0) return { text: '受付期限切れ(' + dateText + ')', closed: true };
+    var diffH = Math.round(diffMs / 3_600_000);
+    return { text: '残り約' + diffH + '時間(' + dateText + 'まで)', closed: false };
+  }
+
+  var REASON_LABELS = { spam: 'スパム', prohibited_item: '禁止出品物', harassment: '嫌がらせ', fraud: '詐欺・不正', other: 'その他' };
+  // キャンセルの理由(アプリの CancelReason と同じ 8 つ)
+  var CANCEL_REASON_LABELS = {
+    mutual_agreement: '双方が合意した', unreachable: '連絡が取れない', no_schedule: '日時が決まらない',
+    lost_or_damaged: '商品の紛失・破損', not_as_described: '説明と著しく異なる', suspected_fake: '偽物・盗品の疑い',
+    safety_concern: '安全上の懸念', other: 'その他',
+  };
+  var CANCELED_BY_LABELS = { buyer: '購入者が申請', seller: '出品者が申請' };
+  // 申請の状態。審査待ち(pending)だけが、承認・却下の対象
+  var CANCEL_STATUS = {
+    pending: { label: '審査待ち', cls: 'pill todo' }, approved: { label: '承認済み', cls: 'pill ok' },
+    rejected: { label: '却下', cls: 'pill warn' }, withdrawn: { label: '取り下げ', cls: 'pill' }, void: { label: '無効', cls: 'pill' },
+  };
+  function cancelStatus(status) { return CANCEL_STATUS[status] || { label: status || '不明', cls: 'pill' }; }
+  function pendingCount(list) { return list.filter(function (c) { return c.status === 'pending'; }).length; }
+  function formatDateTime(iso) {
+    return new Date(iso).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  var SUBTITLES = {
+    reviews: '審査中(disputed)の取引 — 完了・取消の判断',
+    reports: '取引完了後72時間以内の問題報告 — 返金・却下の判断',
+    cancels: 'キャンセルの申請 — 審査待ちを承認・却下する(審査待ちが先頭)',
+  };
+
   function originLabel(deal) {
     if (deal.disputed_by) return '購入者:問題あり';
     if (deal.review_requested_by) return '出品者:審査申請';
     return '審査中';
   }
 
-  // ---- 1. ログイン(ADMIN_SECRET または Google) ----
-  function tryCredAndLoadList(type, value, busyBtn, busyText, idleText) {
+  // ---- 1. シークレット ----
+  function trySecretAndLoadList(secret, type) {
     el.secretError.hidden = true;
-    if (busyBtn) { busyBtn.disabled = true; busyBtn.textContent = busyText; }
-    setCred(type, value);
+    el.secretSubmit.disabled = true;
+    el.secretSubmit.textContent = '確認中…';
+    setCred(type || 'secret', secret);
     callAdmin('list_reviews')
       .then(function (json) {
         show('list');
-        renderList(json.deals || []);
+        loadBothCounts();
+        renderActiveTab();
       })
       .catch(function (err) {
-        clearCred();
+        clearSecret();
         el.secretError.hidden = false;
         el.secretError.textContent = err.code === 'unauthorized'
           ? (type === 'google' ? 'このGoogleアカウントではログインできません。' : 'ADMIN_SECRET が正しくありません。')
           : '接続に失敗しました(' + err.message + ')。もう一度お試しください。';
       })
       .finally(function () {
-        if (busyBtn) { busyBtn.disabled = false; busyBtn.textContent = idleText; }
+        el.secretSubmit.disabled = false;
+        el.secretSubmit.textContent = '保存して一覧へ';
       });
   }
 
   el.secretSubmit.addEventListener('click', function () {
     var v = el.secretInput.value.trim();
     if (!v) return;
-    tryCredAndLoadList('secret', v, el.secretSubmit, '確認中…', '保存して一覧へ');
+    trySecretAndLoadList(v);
   });
   el.secretInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') el.secretSubmit.click();
   });
   el.changeSecretBtn.addEventListener('click', function () {
-    clearCred();
+    clearSecret();
     el.secretInput.value = '';
     el.secretError.hidden = true;
     show('secret');
   });
 
-  function handleGoogleCredential(response) {
-    tryCredAndLoadList('google', response.credential, null, '', '');
+  // ---- 2. 一覧(タブ) ----
+  function setTab(tab) {
+    activeTab = tab;
+    el.tabReviews.classList.toggle('active', tab === 'reviews');
+    el.tabReports.classList.toggle('active', tab === 'reports');
+    el.tabCancels.classList.toggle('active', tab === 'cancels');
+    el.pageSub.textContent = SUBTITLES[tab];
+    renderActiveTab();
   }
-  if (window.google && google.accounts && google.accounts.id) {
-    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
-    google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
-  } else {
-    // gsi/client はまだ async ロード中のことがある。読み込み完了を少し待って再試行する。
-    window.addEventListener('load', function () {
-      if (window.google && google.accounts && google.accounts.id) {
-        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
-        google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
-      }
-    });
+  var userPickedTab = false;
+  function pickTab(tab) { userPickedTab = true; setTab(tab); }
+  el.tabReviews.addEventListener('click', function () { pickTab('reviews'); });
+  el.tabReports.addEventListener('click', function () { pickTab('reports'); });
+  el.tabCancels.addEventListener('click', function () { pickTab('cancels'); });
+
+  function loadBothCounts() {
+    callAdmin('list_reviews').then(function (json) { el.countReviews.textContent = (json.deals || []).length; }).catch(function () {});
+    callAdmin('list_deal_reports').then(function (json) { el.countReports.textContent = (json.reports || []).length; }).catch(function () {});
+    callAdmin('list_cancellations').then(function (json) {
+      var pending = pendingCount(json.cancellations || []);
+      el.countCancels.textContent = pending;
+      // 審査待ちの申請があるのに最初のタブのままだと見落とすので、まだタブを選んでいなければ「キャンセル」を開く
+      if (pending > 0 && !userPickedTab && activeTab === 'reviews') setTab('cancels');
+    }).catch(function () {});
   }
 
-  // ---- 2. 一覧 ----
-  function loadList() {
+  function renderActiveTab() {
     el.listLoading.hidden = false;
     el.listError.hidden = true;
     el.listRetry.hidden = true;
     el.listEmpty.hidden = true;
     el.dealList.innerHTML = '';
-    callAdmin('list_reviews')
-      .then(function (json) { renderList(json.deals || []); })
+    var tab = activeTab;
+    var action = { reviews: 'list_reviews', reports: 'list_deal_reports', cancels: 'list_cancellations' }[tab];
+    callAdmin(action)
+      .then(function (json) {
+        if (tab !== activeTab) return; // 読み込み中に別のタブへ切り替えた
+        if (tab === 'reviews') { renderList(json.deals || []); el.countReviews.textContent = (json.deals || []).length; }
+        else if (tab === 'reports') { renderReportList(json.reports || []); el.countReports.textContent = (json.reports || []).length; }
+        else { renderCancelList(json.cancellations || []); el.countCancels.textContent = pendingCount(json.cancellations || []); }
+      })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
         el.listError.hidden = false;
         el.listError.textContent = '読み込みに失敗しました(' + err.message + ')。';
         el.listRetry.hidden = false;
@@ -444,6 +650,7 @@
   function renderList(deals) {
     el.dealList.innerHTML = '';
     el.listEmpty.hidden = deals.length !== 0;
+    el.listEmpty.textContent = '審査中の取引はありません。';
     deals.forEach(function (deal) {
       var row = document.createElement('button');
       row.className = 'deal-row';
@@ -456,11 +663,139 @@
     });
   }
 
-  el.listRetry.addEventListener('click', loadList);
-  el.listRefresh.addEventListener('click', loadList);
-  el.backToList.addEventListener('click', function () { show('list'); loadList(); });
+  function renderReportList(reports) {
+    el.dealList.innerHTML = '';
+    el.listEmpty.hidden = reports.length !== 0;
+    el.listEmpty.textContent = '未対応の問題報告はありません。';
+    reports.forEach(function (report) {
+      var deal = report.deal;
+      var row = document.createElement('button');
+      row.className = 'deal-row';
+      var priceText = deal ? yen(deal.price_jpy) : '—';
+      var win = deal ? formatRefundWindow(deal.captured_at) : { text: '取引不明', closed: true };
+      var alreadyRefunded = deal && deal.refunded_at;
+      var pillHtml = alreadyRefunded
+        ? '<span class="pill">返金済み</span>'
+        : '<span class="pill' + (win.closed ? ' warn' : '') + '">' + win.text + '</span>';
+      row.innerHTML =
+        '<span class="price">' + priceText + '</span>' +
+        '<span class="meta"><span class="origin">' + (REASON_LABELS[report.reason] || 'その他') + '</span></span>' +
+        '<span class="expires">' + pillHtml + '</span>';
+      row.addEventListener('click', function () { openReportDetail(report.id); });
+      el.dealList.appendChild(row);
+    });
+  }
 
-  // ---- 3. 詳細 ----
+  // 詳細・タイトルは利用者が書いた文章なので、innerHTML は使わず textContent で入れる(XSS 対策)。
+  function textSpan(className, text) {
+    var span = document.createElement('span');
+    span.className = className;
+    span.textContent = text;
+    return span;
+  }
+
+  function renderCancelList(cancellations) {
+    el.dealList.innerHTML = '';
+    el.listEmpty.hidden = cancellations.length !== 0;
+    el.listEmpty.textContent = 'キャンセルの申請はまだありません。';
+    cancellations.forEach(function (c) {
+      var row = document.createElement('button');
+      var st = cancelStatus(c.status);
+      row.className = 'deal-row' + (c.status === 'pending' ? '' : ' done');
+      var meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.appendChild(textSpan(st.cls, st.label));
+      meta.appendChild(document.createTextNode(' '));
+      meta.appendChild(textSpan('origin', (CANCEL_REASON_LABELS[c.reason] || c.reason) + ' · ' + (CANCELED_BY_LABELS[c.canceled_by] || '退会済みの利用者')));
+      meta.appendChild(document.createElement('br'));
+      meta.appendChild(textSpan('sub', c.listing_title || '(出品タイトル不明)'));
+      row.appendChild(textSpan('price', c.price_jpy == null ? '—' : yen(c.price_jpy)));
+      row.appendChild(meta);
+      row.appendChild(textSpan('expires', formatDateTime(c.created_at)));
+      row.addEventListener('click', function () { openCancelDetail(c.id); });
+      el.dealList.appendChild(row);
+    });
+  }
+
+  var currentCancelRequestId = null;
+
+  function openCancelDetail(requestId) {
+    currentCancelRequestId = requestId;
+    el.cancelDecision.hidden = true;
+    el.cancelActionError.hidden = true;
+    el.cancelNoteInput.value = '';
+    show('cancel-detail');
+    el.cancelDetailLoading.hidden = false;
+    el.cancelDetailError.hidden = true;
+    el.cancelDetailBody.hidden = true;
+    callAdmin('cancellation_detail', { request_id: requestId })
+      .then(function (json) {
+        var c = json.cancellation;
+        if (!c) {
+          el.cancelDetailError.hidden = false;
+          el.cancelDetailError.textContent = 'この申請は見つかりませんでした。一覧に戻って更新してください。';
+          return;
+        }
+        el.cancelDetailTitle.textContent = c.listing_title || '(出品タイトル不明)';
+        el.cancelDetailPrice.textContent = c.price_jpy == null ? '' : yen(c.price_jpy);
+        var st = cancelStatus(c.status);
+        el.cancelDetailBy.textContent = st.label + ' · ' + (CANCELED_BY_LABELS[c.canceled_by] || '退会済みの利用者');
+        el.cancelDetailBy.className = st.cls;
+        el.cancelDetailBuyer.textContent = c.buyer_display_name || '(表示名未設定)';
+        el.cancelDetailSeller.textContent = c.seller_display_name || '(表示名未設定)';
+        el.cancelReason.textContent = '理由: ' + (CANCEL_REASON_LABELS[c.reason] || c.reason);
+        el.cancelDetailText.textContent = c.detail;
+        el.cancelCreatedAt.textContent = '申請日時: ' + new Date(c.created_at).toLocaleString('ja-JP');
+        el.cancelDecidedAt.textContent = c.status !== 'pending' && c.decided_at
+          ? st.label + 'になった日時: ' + new Date(c.decided_at).toLocaleString('ja-JP') : '';
+        el.cancelDecision.hidden = c.status !== 'pending';
+        var count = c.author_recent_cancel_count;
+        el.cancelHistory.textContent = count == null ? '' : 'この人の直近30日の承認後キャンセル: ' + count + '回';
+        el.cancelHistory.style.color = count != null && count >= 2 ? 'var(--danger)' : '';
+        renderMessageList(el.cancelMessages, json.messages || [], c.buyer_id);
+        el.cancelDetailBody.hidden = false;
+      })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.cancelDetailError.hidden = false;
+        el.cancelDetailError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { el.cancelDetailLoading.hidden = true; });
+  }
+
+  function submitCancelDecision(action, btn) {
+    var note = el.cancelNoteInput.value.trim();
+    if (!note) { el.cancelNoteInput.focus(); return; }
+    el.cancelActionError.hidden = true;
+    el.approveCancelBtn.disabled = true;
+    el.rejectCancelBtn.disabled = true;
+    var originalText = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span> 送信中…';
+    callAdmin(action, { request_id: currentCancelRequestId, note: note })
+      .then(function () { show('list'); renderActiveTab(); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.cancelActionError.hidden = false;
+        el.cancelActionError.textContent = '失敗しました(' + err.message + ')。' +
+          (err.code === 'deal_invalid_state' ? ' 申請がすでに判断済み・取り下げ済みか、取引が受け渡し待ちではなくなっています。一覧に戻って更新してください。' : '');
+      })
+      .finally(function () {
+        el.approveCancelBtn.disabled = false;
+        el.rejectCancelBtn.disabled = false;
+        btn.textContent = originalText;
+      });
+  }
+  el.approveCancelBtn.addEventListener('click', function () { submitCancelDecision('approve_cancellation', el.approveCancelBtn); });
+  el.rejectCancelBtn.addEventListener('click', function () { submitCancelDecision('reject_cancellation', el.rejectCancelBtn); });
+
+  el.backToListFromCancel.addEventListener('click', function () { show('list'); renderActiveTab(); });
+
+  el.listRetry.addEventListener('click', renderActiveTab);
+  el.listRefresh.addEventListener('click', renderActiveTab);
+  el.backToList.addEventListener('click', function () { show('list'); renderActiveTab(); });
+  el.backToListFromReport.addEventListener('click', function () { show('list'); renderActiveTab(); });
+
+  // ---- 3a. 審査中の取引の詳細 ----
   var currentDealId = null;
 
   function openDetail(dealId) {
@@ -482,26 +817,21 @@
         el.detailBody.hidden = false;
       })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
         el.detailError.hidden = false;
         el.detailError.textContent = '読み込みに失敗しました(' + err.message + ')。';
       })
       .finally(function () { el.detailLoading.hidden = true; });
   }
 
-  function renderDetail(deal, messages) {
-    el.detailTitle.textContent = deal.listing_title || '(出品タイトル不明)';
-    el.detailPrice.textContent = yen(deal.price_jpy) + ' / 期限 ' + formatExpires(deal.expires_at);
-    el.detailOrigin.textContent = originLabel(deal);
-    el.detailBuyer.textContent = deal.buyer_display_name || '(表示名未設定)';
-    el.detailSeller.textContent = deal.seller_display_name || '(表示名未設定)';
-
-    el.detailMessages.innerHTML = '';
+  function renderMessageList(container, messages, buyerId) {
+    container.innerHTML = '';
     if (messages.length === 0) {
-      el.detailMessages.innerHTML = '<div class="sub">メッセージはありません。</div>';
+      container.innerHTML = '<div class="sub">メッセージはありません。</div>';
+      return;
     }
     messages.forEach(function (m) {
-      var who = m.sender_id === deal.buyer_id ? 'buyer' : 'seller';
+      var who = m.sender_id === buyerId ? 'buyer' : 'seller';
       var div = document.createElement('div');
       div.className = 'msg ' + who;
       var body = document.createElement('div');
@@ -512,9 +842,18 @@
         new Date(m.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       div.appendChild(body);
       div.appendChild(meta);
-      el.detailMessages.appendChild(div);
+      container.appendChild(div);
     });
-    el.detailMessages.scrollTop = el.detailMessages.scrollHeight;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function renderDetail(deal, messages) {
+    el.detailTitle.textContent = deal.listing_title || '(出品タイトル不明)';
+    el.detailPrice.textContent = yen(deal.price_jpy) + ' / 期限 ' + formatExpires(deal.expires_at);
+    el.detailOrigin.textContent = originLabel(deal);
+    el.detailBuyer.textContent = deal.buyer_display_name || '(表示名未設定)';
+    el.detailSeller.textContent = deal.seller_display_name || '(表示名未設定)';
+    renderMessageList(el.detailMessages, messages, deal.buyer_id);
   }
 
   function submitDecision(action) {
@@ -527,9 +866,9 @@
     var originalText = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span> 送信中…';
     callAdmin(action, { deal_id: currentDealId, note: note })
-      .then(function () { show('list'); loadList(); })
+      .then(function () { show('list'); renderActiveTab(); })
       .catch(function (err) {
-        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
         el.actionError.hidden = false;
         el.actionError.textContent = '失敗しました(' + err.message + ')。' +
           (err.code === 'deal_invalid_state' ? ' 少し待ってからもう一度お試しください。' : '');
@@ -543,6 +882,140 @@
 
   el.completeBtn.addEventListener('click', function () { submitDecision('complete'); });
   el.cancelBtn.addEventListener('click', function () { submitDecision('cancel'); });
+
+  // ---- 3b. 事後問題報告の詳細 ----
+  var currentReportId = null;
+  var currentReportDealId = null;
+
+  function openReportDetail(reportId) {
+    currentReportId = reportId;
+    currentReportDealId = null;
+    show('report-detail');
+    el.reportDetailLoading.hidden = false;
+    el.reportDetailError.hidden = true;
+    el.reportDetailBody.hidden = true;
+    el.reportActionError.hidden = true;
+    el.reportNoteInput.value = '';
+    callAdmin('deal_report_detail', { report_id: reportId })
+      .then(function (json) {
+        if (!json.report) {
+          el.reportDetailError.hidden = false;
+          el.reportDetailError.textContent = 'この報告は見つかりませんでした。一覧に戻って更新してください。';
+          return;
+        }
+        renderReportDetail(json.report, json.messages || []);
+        el.reportDetailBody.hidden = false;
+      })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.reportDetailError.hidden = false;
+        el.reportDetailError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { el.reportDetailLoading.hidden = true; });
+  }
+
+  function renderReportDetail(report, messages) {
+    var deal = report.deal;
+    el.reportReason.textContent = '理由: ' + (REASON_LABELS[report.reason] || report.reason);
+    el.reportDetail.textContent = report.detail || '(詳細の記載なし)';
+    el.reportCreatedAt.textContent = '報告日時: ' + new Date(report.created_at).toLocaleString('ja-JP');
+
+    if (!deal) {
+      el.reportDetailTitle.textContent = '(対象の取引が見つかりません)';
+      el.reportDetailPrice.textContent = '';
+      el.reportDetailWindow.textContent = '';
+      el.reportDetailBuyer.textContent = '—';
+      el.reportDetailSeller.textContent = '—';
+      renderMessageList(el.reportMessages, [], null);
+      el.refundBtn.disabled = true;
+      el.dismissBtn.disabled = false;
+      return;
+    }
+    currentReportDealId = deal.id;
+    el.reportDetailTitle.textContent = deal.listing_title || '(出品タイトル不明)';
+    el.reportDetailPrice.textContent = yen(deal.price_jpy) + '(手数料 ' + yen(deal.fee_jpy) + ' を除くと ' + yen(deal.price_jpy - deal.fee_jpy) + ')';
+    el.reportDetailBuyer.textContent = deal.buyer_display_name || '(表示名未設定)';
+    el.reportDetailSeller.textContent = deal.seller_display_name || '(表示名未設定)';
+    renderMessageList(el.reportMessages, messages, deal.buyer_id);
+
+    if (deal.refunded_at) {
+      el.reportDetailWindow.textContent = '返金済み(' + yen(deal.refund_amount_jpy) + ')';
+      el.reportDetailWindow.className = 'pill';
+      el.refundBtn.disabled = true;
+    } else if (deal.status !== 'completed') {
+      el.reportDetailWindow.textContent = '取引ステータス: ' + deal.status + '(返金対象外)';
+      el.reportDetailWindow.className = 'pill warn';
+      el.refundBtn.disabled = true;
+    } else {
+      var win = formatRefundWindow(deal.captured_at);
+      el.reportDetailWindow.textContent = win.text;
+      el.reportDetailWindow.className = 'pill' + (win.closed ? ' warn' : '');
+      el.refundBtn.disabled = win.closed;
+    }
+  }
+
+  function submitRefund() {
+    var note = el.reportNoteInput.value.trim();
+    if (!note) { el.reportNoteInput.focus(); return; }
+    if (!currentReportDealId) return;
+    el.reportActionError.hidden = true;
+    el.refundBtn.disabled = true;
+    el.dismissBtn.disabled = true;
+    var originalText = el.refundBtn.textContent;
+    el.refundBtn.innerHTML = '<span class="spinner"></span> 返金中…';
+    callAdmin('refund', { deal_id: currentReportDealId, note: note, report_id: currentReportId })
+      .then(function () { show('list'); renderActiveTab(); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.reportActionError.hidden = false;
+        el.reportActionError.textContent = '失敗しました(' + err.message + ')。' +
+          (err.code === 'deal_invalid_state' || err.code === 'refund_window_closed' ? ' 条件を満たしていないか、既に処理済みの可能性があります。' : '');
+      })
+      .finally(function () {
+        el.refundBtn.disabled = false;
+        el.dismissBtn.disabled = false;
+        el.refundBtn.textContent = originalText;
+      });
+  }
+
+  function submitDismiss() {
+    el.reportActionError.hidden = true;
+    el.refundBtn.disabled = true;
+    el.dismissBtn.disabled = true;
+    var originalText = el.dismissBtn.textContent;
+    el.dismissBtn.innerHTML = '<span class="spinner"></span> 送信中…';
+    callAdmin('dismiss_deal_report', { report_id: currentReportId })
+      .then(function () { show('list'); renderActiveTab(); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearSecret(); show('secret'); return; }
+        el.reportActionError.hidden = false;
+        el.reportActionError.textContent = '失敗しました(' + err.message + ')。';
+      })
+      .finally(function () {
+        el.refundBtn.disabled = false;
+        el.dismissBtn.disabled = false;
+        el.dismissBtn.textContent = originalText;
+      });
+  }
+
+  el.refundBtn.addEventListener('click', submitRefund);
+  el.dismissBtn.addEventListener('click', submitDismiss);
+
+  function handleGoogleCredential(response) {
+    trySecretAndLoadList(response.credential, 'google');
+  }
+  if (window.google && google.accounts && google.accounts.id) {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+    google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
+  } else {
+    // gsi/client はまだ async ロード中のことがある。読み込み完了を少し待って再試行する。
+    window.addEventListener('load', function () {
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+        google.accounts.id.renderButton(document.getElementById('googleButton'), { theme: 'outline', size: 'large', width: 300 });
+      }
+    });
+  }
 
   // ---- 4. 大学の要望 ----
   var openUniRowId = null; // 一度に1件だけ編集パネルを開く
@@ -644,6 +1117,6 @@
 
   // ---- 起動 ----
   var saved = getCred();
-  if (saved) { tryCredAndLoadList(saved.type, saved.value, null, '', ''); } else { show('secret'); el.secretInput.focus(); }
+  if (saved) { trySecretAndLoadList(saved.value, saved.type); } else { show('secret'); el.secretInput.focus(); }
 })();
 </script>
