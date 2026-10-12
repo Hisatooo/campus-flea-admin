@@ -185,6 +185,24 @@
     width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
   }
+  .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .stat-tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-tile .label { font-size: 12px; color: var(--muted); }
+  .stat-tile .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-section { margin-bottom: 22px; }
+  .stat-section h3 { font-size: 14px; margin: 0 0 8px; }
+  .stat-row { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 7.5em; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .stat-row .label { overflow-wrap: anywhere; }
+  .stat-row .bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .stat-row .bar span { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+  .stat-row .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat-row .num small { color: var(--muted); margin-left: 4px; }
+  .stat-note { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+  @media (max-width: 520px) {
+    .stat-row { grid-template-columns: minmax(0, 1fr) 7.5em; }
+    .stat-row .bar { grid-column: 1 / -1; order: 3; }
+  }
+
   label.checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; cursor: pointer; }
 
   [hidden] { display: none !important; }
@@ -208,6 +226,7 @@
   <nav class="main-nav" id="mainNav" hidden>
     <button id="navReview" class="active">審査キュー</button>
     <button id="navUniversities">大学の要望</button>
+    <button id="navStats">統計</button>
   </nav>
 
   <!-- 1. シークレット入力 / Googleログイン -->
@@ -351,6 +370,18 @@
       <button class="ghost" id="uniRefresh">更新</button>
     </div>
   </section>
+
+  <!-- 5. 統計 -->
+  <section id="screen-stats" class="card" hidden>
+    <div id="statsLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
+    <div id="statsError" class="error-banner" hidden></div>
+    <p class="stat-note" id="statsNote" hidden></p>
+    <div id="statsBody"></div>
+    <div class="btn-row">
+      <button class="ghost" id="statsRefresh">更新</button>
+      <button class="ghost" id="statsCopy">表をコピー（TSV）</button>
+    </div>
+  </section>
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -368,6 +399,14 @@
     mainNav: document.getElementById('mainNav'),
     navReview: document.getElementById('navReview'),
     navUniversities: document.getElementById('navUniversities'),
+    navStats: document.getElementById('navStats'),
+    screenStats: document.getElementById('screen-stats'),
+    statsLoading: document.getElementById('statsLoading'),
+    statsError: document.getElementById('statsError'),
+    statsNote: document.getElementById('statsNote'),
+    statsBody: document.getElementById('statsBody'),
+    statsRefresh: document.getElementById('statsRefresh'),
+    statsCopy: document.getElementById('statsCopy'),
     screenUni: document.getElementById('screen-uni'),
     uniLoading: document.getElementById('uniLoading'),
     uniError: document.getElementById('uniError'),
@@ -470,9 +509,14 @@
     el.changeSecretBtn.hidden = screen === 'secret';
     el.screenUni.hidden = screen !== 'uni';
     el.mainNav.hidden = screen === 'secret';
+    el.screenStats.hidden = screen !== 'stats';
     el.navUniversities.classList.toggle('active', screen === 'uni');
-    el.navReview.classList.toggle('active', screen !== 'uni');
-    if (screen === 'uni') {
+    el.navStats.classList.toggle('active', screen === 'stats');
+    el.navReview.classList.toggle('active', screen !== 'uni' && screen !== 'stats');
+    if (screen === 'stats') {
+      el.pageTitle.textContent = '統計';
+      el.pageSub.textContent = '利用者の属性と、出品・取引の集計。個人の情報は含みません。';
+    } else if (screen === 'uni') {
       el.pageTitle.textContent = '大学の要望';
       el.pageSub.textContent = '要望が多い順。メールドメインを設定すると有効化できます。';
     } else if (screen !== 'secret') {
@@ -483,6 +527,7 @@
 
   el.navReview.addEventListener('click', function () { show('list'); renderActiveTab(); });
   el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
+  el.navStats.addEventListener('click', function () { show('stats'); loadStats(); });
 
   function callAdmin(action, extra) {
     var body = Object.assign({ action: action }, extra || {});
@@ -1016,6 +1061,96 @@
       }
     });
   }
+
+  // ---- 5. 統計 ----
+  // 見出し・並び・ラベルは DB(admin_user_stats)が決める。ここは返ってきた表をそのまま描くだけ。
+  var SMALL_CELL = 5; // これ未満の区分は、個人が推測されうる
+  var lastStats = null;
+
+  function divWith(className, text) {
+    var node = document.createElement('div');
+    node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function loadStats() {
+    el.statsLoading.hidden = false;
+    el.statsError.hidden = true;
+    el.statsNote.hidden = true;
+    el.statsBody.innerHTML = '';
+    callAdmin('user_stats')
+      .then(function (json) { lastStats = json; renderStats(json); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        el.statsError.hidden = false;
+        el.statsError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { el.statsLoading.hidden = true; });
+  }
+
+  function renderStats(json) {
+    el.statsBody.innerHTML = '';
+    el.statsNote.hidden = false;
+    el.statsNote.textContent = '集計: ' + new Date(json.generated_at).toLocaleString('ja-JP')
+      + '。審査用アカウントと、プロフィール未設定の利用者は含みません。'
+      + SMALL_CELL + '人未満の区分は、社外に出す資料では伏せてください(個人が推測されるため)。';
+    var tiles = divWith('stat-tiles');
+    (json.summary || []).forEach(function (item) {
+      var tile = divWith('stat-tile');
+      tile.appendChild(divWith('label', item.label));
+      tile.appendChild(divWith('value', Number(item.value).toLocaleString('ja-JP')));
+      tiles.appendChild(tile);
+    });
+    el.statsBody.appendChild(tiles);
+    (json.sections || []).forEach(function (section) {
+      var rows = section.rows || [];
+      var total = rows.reduce(function (sum, row) { return sum + row.count; }, 0);
+      var max = rows.reduce(function (m, row) { return Math.max(m, row.count); }, 0);
+      var box = divWith('stat-section');
+      var title = document.createElement('h3');
+      title.textContent = section.title;
+      box.appendChild(title);
+      if (rows.length === 0) box.appendChild(divWith('stat-note', 'まだデータがありません。'));
+      rows.forEach(function (row) {
+        var line = divWith('stat-row');
+        line.appendChild(divWith('label', row.label));
+        var bar = divWith('bar');
+        var fill = document.createElement('span');
+        fill.style.width = (max ? Math.round(row.count / max * 100) : 0) + '%';
+        bar.appendChild(fill);
+        line.appendChild(bar);
+        var num = divWith('num', row.count.toLocaleString('ja-JP'));
+        var share = document.createElement('small');
+        share.textContent = (total ? Math.round(row.count / total * 1000) / 10 : 0) + '%';
+        num.appendChild(share);
+        line.appendChild(num);
+        box.appendChild(line);
+      });
+      el.statsBody.appendChild(box);
+    });
+  }
+
+  /** スプレッドシートに貼れる形(タブ区切り)。 */
+  function statsAsTsv(json) {
+    var lines = [['項目', '値'].join('\t')];
+    (json.summary || []).forEach(function (item) { lines.push([item.label, item.value].join('\t')); });
+    (json.sections || []).forEach(function (section) {
+      lines.push('');
+      lines.push([section.title, '人数・件数'].join('\t'));
+      (section.rows || []).forEach(function (row) { lines.push([row.label, row.count].join('\t')); });
+    });
+    return lines.join('\n');
+  }
+
+  el.statsRefresh.addEventListener('click', loadStats);
+  el.statsCopy.addEventListener('click', function () {
+    if (!lastStats) return;
+    navigator.clipboard.writeText(statsAsTsv(lastStats))
+      .then(function () { el.statsCopy.textContent = 'コピーしました'; })
+      .catch(function () { el.statsCopy.textContent = 'コピーできませんでした'; })
+      .finally(function () { setTimeout(function () { el.statsCopy.textContent = '表をコピー（TSV）'; }, 1600); });
+  });
 
   // ---- 4. 大学の要望 ----
   var openUniRowId = null; // 一度に1件だけ編集パネルを開く
