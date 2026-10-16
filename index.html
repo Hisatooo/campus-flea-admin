@@ -179,6 +179,9 @@
   .uni-row-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
   .uni-row-head .name { font-weight: 600; flex: 1; min-width: 0; }
   .uni-row-head .meta { font-size: 12px; color: var(--muted); }
+  .wish-emails { margin-top: 16px; display: grid; gap: 8px; }
+  .wish-emails ul { margin: 0; padding-left: 18px; font-variant-numeric: tabular-nums; user-select: text; }
+  .wish-emails button { justify-self: start; }
   .uni-row-head .wish { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 48px; text-align: right; }
   .uni-edit { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .uni-edit input[type="text"] {
@@ -1244,7 +1247,50 @@
         });
     });
 
+    panel.appendChild(wishEmailsSection(uni));
     row.appendChild(panel);
+  }
+
+  // その大学に「対応したら知らせてほしい」とメールアドレスを残した人。対応した時に、ここからコピーしてメールを送る。
+  // アドレスは利用者が入力した値なので、textContent でだけ表示する(HTML として解釈させない)。
+  function wishEmailsSection(uni) {
+    var section = document.createElement('div');
+    section.className = 'wish-emails';
+    var label = document.createElement('label');
+    label.className = 'field';
+    label.textContent = '対応したら知らせてほしい人のメールアドレス';
+    var status = spanWith('sub', '読み込み中…');
+    var list = document.createElement('ul');
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'ghost';
+    copyBtn.textContent = 'すべてコピー';
+    copyBtn.hidden = true;
+    section.appendChild(label);
+    section.appendChild(status);
+    section.appendChild(list);
+    section.appendChild(copyBtn);
+
+    callAdmin('list_wish_emails', { university_id: uni.id })
+      .then(function (json) {
+        var emails = (json.emails || []).map(function (e) { return e.email; });
+        status.textContent = emails.length === 0 ? 'まだありません。' : emails.length + '件';
+        emails.forEach(function (email) {
+          var item = document.createElement('li');
+          item.textContent = email;
+          list.appendChild(item);
+        });
+        copyBtn.hidden = emails.length === 0;
+        copyBtn.addEventListener('click', function () {
+          navigator.clipboard.writeText(emails.join('\n'))
+            .then(function () { copyBtn.textContent = 'コピーしました'; })
+            .catch(function () { copyBtn.textContent = 'コピーできませんでした'; });
+        });
+      })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        status.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      });
+    return section;
   }
 
   el.uniRetry.addEventListener('click', loadUniversities);
