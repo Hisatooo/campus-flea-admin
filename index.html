@@ -206,6 +206,16 @@
     .stat-row .bar { grid-column: 1 / -1; order: 3; }
   }
 
+  nav.main-nav .count { margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--danger); color: var(--danger-ink); }
+  nav.main-nav .count:empty { display: none; }
+  .content-images { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .content-images img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .msg.reported { outline: 3px solid var(--danger); }
+  .ng-row { display: flex; gap: 8px; margin-top: 10px; }
+  .ng-row input { flex: 1; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .ng-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .ng-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+  .ng-chip button { font: inherit; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 4px; }
   label.checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; cursor: pointer; }
 
   [hidden] { display: none !important; }
@@ -228,6 +238,7 @@
 
   <nav class="main-nav" id="mainNav" hidden>
     <button id="navReview" class="active">審査キュー</button>
+    <button id="navContent">通報<span class="count" id="countContent"></span></button>
     <button id="navUniversities">大学の要望</button>
     <button id="navStats">統計</button>
   </nav>
@@ -362,6 +373,58 @@
     </div>
   </section>
 
+  <!-- 3d. 出品・ユーザー・メッセージの通報(24時間以内に対応)と、禁止語 -->
+  <section id="screen-content" class="card" hidden>
+    <div id="contentLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
+    <div id="contentError" class="error-banner" hidden></div>
+    <div id="contentEmpty" class="empty" hidden>未対応の通報はありません。</div>
+    <div id="contentList" class="deal-list"></div>
+    <div class="btn-row">
+      <button class="ghost" id="contentRefresh">更新</button>
+    </div>
+    <div class="divider"><span>禁止語</span></div>
+    <p class="sub">出品・メッセージ・表示名・評価コメントに含まれると、保存できません。全角・半角・大文字小文字の違いは区別しません。ひらがなとカタカナは、別の語として足してください。普通の出品文に含まれる語(例:「ユニセックス」の中の「セックス」)は、誤って弾くので足さないでください。</p>
+    <div class="ng-row">
+      <input type="text" id="ngInput" placeholder="足す語(2〜30文字)" autocomplete="off" />
+      <button class="primary" id="ngAdd">足す</button>
+    </div>
+    <div id="ngError" class="error-banner" hidden></div>
+    <div id="ngList" class="ng-list"></div>
+  </section>
+
+  <section id="screen-content-detail" class="card" hidden>
+    <button class="link" id="backToContent">← 通報の一覧へ戻る</button>
+    <div id="cdLoading" class="empty" style="margin-top:14px;"><span class="spinner"></span> 読み込み中…</div>
+    <div id="cdError" class="error-banner" hidden></div>
+    <div id="cdBody" hidden>
+      <div class="detail-head">
+        <div>
+          <h2 id="cdTitle"></h2>
+          <div class="sub" id="cdSub"></div>
+        </div>
+        <span class="pill" id="cdDeadline"></span>
+      </div>
+      <div class="report-box">
+        <div class="reason" id="cdReason"></div>
+        <div id="cdDetail" style="white-space:pre-wrap;"></div>
+        <div class="sub" id="cdMeta" style="margin-top:6px;"></div>
+      </div>
+      <div id="cdContent"></div>
+      <div class="report-box" id="cdOffender"></div>
+      <div id="cdDecision">
+        <label class="checkbox" id="cdRemoveRow"><input type="checkbox" id="cdRemove" /> <span id="cdRemoveLabel"></span></label>
+        <label class="checkbox"><input type="checkbox" id="cdBan" /> 投稿した人を利用停止にする(ログインできなくなり、その人の出品も見えなくなる)</label>
+        <label class="field" for="cdNote">判断の理由(必須・記録されます)</label>
+        <textarea id="cdNote" placeholder="例: 出品文に差別的な表現があった"></textarea>
+        <div id="cdActionError" class="error-banner" hidden></div>
+        <div class="btn-row">
+          <button class="danger" id="cdResolve" disabled>削除・利用停止を実行する</button>
+          <button class="ghost" id="cdDismiss">違反なしとして閉じる</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 4. 大学の要望 -->
   <section id="screen-uni" class="card" hidden>
     <div id="uniLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
@@ -489,6 +552,10 @@
     cancelActionError: document.getElementById('cancelActionError'),
     approveCancelBtn: document.getElementById('approveCancelBtn'),
     rejectCancelBtn: document.getElementById('rejectCancelBtn'),
+    navContent: document.getElementById('navContent'),
+    countContent: document.getElementById('countContent'),
+    screenContent: document.getElementById('screen-content'),
+    screenContentDetail: document.getElementById('screen-content-detail'),
   };
 
   function getCred() { try { return JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); } catch (e) { return null; } }
@@ -513,10 +580,17 @@
     el.screenUni.hidden = screen !== 'uni';
     el.mainNav.hidden = screen === 'secret';
     el.screenStats.hidden = screen !== 'stats';
+    el.screenContent.hidden = screen !== 'content';
+    el.screenContentDetail.hidden = screen !== 'content-detail';
+    var isContent = screen === 'content' || screen === 'content-detail';
     el.navUniversities.classList.toggle('active', screen === 'uni');
     el.navStats.classList.toggle('active', screen === 'stats');
-    el.navReview.classList.toggle('active', screen !== 'uni' && screen !== 'stats');
-    if (screen === 'stats') {
+    el.navContent.classList.toggle('active', isContent);
+    el.navReview.classList.toggle('active', screen !== 'uni' && screen !== 'stats' && !isContent);
+    if (isContent) {
+      el.pageTitle.textContent = '通報';
+      el.pageSub.textContent = '出品・ユーザー・メッセージの通報。届いてから24時間以内に対応します(規約 第16条)。';
+    } else if (screen === 'stats') {
       el.pageTitle.textContent = '統計';
       el.pageSub.textContent = '利用者の属性と、出品・取引の集計。個人の情報は含みません。';
     } else if (screen === 'uni') {
@@ -531,6 +605,7 @@
   el.navReview.addEventListener('click', function () { show('list'); renderActiveTab(); });
   el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
   el.navStats.addEventListener('click', function () { show('stats'); loadStats(); });
+  el.navContent.addEventListener('click', function () { show('content'); loadContentReports(); loadNgWords(); });
 
   function callAdmin(action, extra) {
     var body = Object.assign({ action: action }, extra || {});
@@ -661,6 +736,7 @@
   el.tabCancels.addEventListener('click', function () { pickTab('cancels'); });
 
   function loadBothCounts() {
+    callAdmin('list_content_reports').then(function (json) { el.countContent.textContent = (json.reports || []).length || ''; }).catch(function () {});
     callAdmin('list_reviews').then(function (json) { el.countReviews.textContent = (json.deals || []).length; }).catch(function () {});
     callAdmin('list_deal_reports').then(function (json) { el.countReports.textContent = (json.reports || []).length; }).catch(function () {});
     callAdmin('list_cancellations').then(function (json) {
@@ -1295,6 +1371,246 @@
 
   el.uniRetry.addEventListener('click', loadUniversities);
   el.uniRefresh.addEventListener('click', loadUniversities);
+
+
+  // ---- 3d. 出品・ユーザー・メッセージの通報 ----
+  // 利用者が書いた文(出品文・メッセージ・通報の詳細・表示名)は、すべて textContent で入れる(XSS 対策)。
+  var $ = function (id) { return document.getElementById(id); };
+  var TARGET_LABELS = { listing: '出品', user: 'ユーザー', message: 'メッセージ' };
+  var REMOVE_LABELS = { listing: 'この出品を削除する(出品者も元に戻せない)', message: 'このメッセージを削除する', user: '' };
+  var RESPONSE_HOURS = 24;
+  var currentReport = null;
+
+  function deadlineOf(createdAtIso) {
+    var deadline = new Date(createdAtIso).getTime() + RESPONSE_HOURS * 3600000;
+    var diffH = Math.round((deadline - Date.now()) / 3600000);
+    var dateText = formatDateTime(new Date(deadline).toISOString());
+    if (diffH <= 0) return { text: '期限切れ(' + dateText + ')', cls: 'pill warn' };
+    return { text: '残り約' + diffH + '時間(' + dateText + 'まで)', cls: diffH <= 6 ? 'pill warn' : 'pill todo' };
+  }
+
+  function loadContentReports() {
+    $('contentLoading').hidden = false;
+    $('contentError').hidden = true;
+    $('contentEmpty').hidden = true;
+    $('contentList').innerHTML = '';
+    callAdmin('list_content_reports')
+      .then(function (json) {
+        var reports = json.reports || [];
+        el.countContent.textContent = reports.length || '';
+        $('contentEmpty').hidden = reports.length !== 0;
+        reports.forEach(function (r) {
+          var row = document.createElement('button');
+          row.className = 'deal-row';
+          var meta = document.createElement('span');
+          meta.className = 'meta';
+          meta.appendChild(textSpan('origin', TARGET_LABELS[r.target_type] + ' / ' + (REASON_LABELS[r.reason] || 'その他')));
+          meta.appendChild(document.createElement('br'));
+          meta.appendChild(textSpan('', r.summary));
+          var due = deadlineOf(r.created_at);
+          var pill = textSpan(due.cls, due.text);
+          var right = document.createElement('span');
+          right.className = 'expires';
+          right.appendChild(pill);
+          row.appendChild(meta);
+          row.appendChild(right);
+          row.addEventListener('click', function () { openContentReport(r.id); });
+          $('contentList').appendChild(row);
+        });
+      })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        $('contentError').hidden = false;
+        $('contentError').textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { $('contentLoading').hidden = true; });
+  }
+
+  function openContentReport(reportId) {
+    show('content-detail');
+    window.scrollTo(0, 0);
+    $('cdLoading').hidden = false;
+    $('cdError').hidden = true;
+    $('cdBody').hidden = true;
+    $('cdActionError').hidden = true;
+    $('cdNote').value = '';
+    $('cdRemove').checked = false;
+    $('cdBan').checked = false;
+    updateResolveButton();
+    callAdmin('content_report_detail', { report_id: reportId })
+      .then(function (json) { currentReport = json; renderContentReport(json); $('cdBody').hidden = false; })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        $('cdError').hidden = false;
+        $('cdError').textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { $('cdLoading').hidden = true; });
+  }
+
+  function renderContentReport(json) {
+    var r = json.report;
+    $('cdTitle').textContent = TARGET_LABELS[r.target_type] + 'の通報';
+    $('cdSub').textContent = '同じ対象への通報: ' + json.reports_on_target + '件 / 通報 ' + r.id;
+    var due = deadlineOf(r.created_at);
+    $('cdDeadline').className = r.status === 'open' ? due.cls : 'pill ok';
+    $('cdDeadline').textContent = r.status === 'open' ? due.text : '対応済み';
+    $('cdReason').textContent = '理由: ' + (REASON_LABELS[r.reason] || 'その他');
+    $('cdDetail').textContent = r.detail || '';
+    $('cdMeta').textContent = '通報日時: ' + formatDateTime(r.created_at);
+
+    var box = $('cdContent');
+    box.innerHTML = '';
+    if (r.target_type === 'listing') {
+      var l = json.listing;
+      var wrap = document.createElement('div');
+      wrap.className = 'report-box';
+      if (!l) {
+        wrap.textContent = 'この出品は見つかりません(削除済み)。';
+      } else {
+        var imgs = document.createElement('div');
+        imgs.className = 'content-images';
+        (l.image_urls || []).forEach(function (url) {
+          var img = document.createElement('img');
+          img.src = url; img.alt = '出品の写真'; img.loading = 'lazy';
+          imgs.appendChild(img);
+        });
+        wrap.appendChild(imgs);
+        wrap.appendChild(divWith('reason', l.title + '(' + yen(l.price_jpy) + ')'));
+        var desc = divWith('', l.description || '(説明なし)');
+        desc.style.whiteSpace = 'pre-wrap';
+        wrap.appendChild(desc);
+        wrap.appendChild(divWith('sub', l.withdrawn_at ? '状態: 削除済み' : '状態: ' + l.status));
+      }
+      box.appendChild(wrap);
+    } else if (r.target_type === 'message') {
+      var list = document.createElement('div');
+      list.className = 'messages';
+      if (!json.conversation.length) list.textContent = 'このメッセージは見つかりません(削除済み)。';
+      json.conversation.forEach(function (m) {
+        var offenderSent = json.offender && m.sender_id === json.offender.id;
+        var bubble = document.createElement('div');
+        bubble.className = 'msg ' + (offenderSent ? 'buyer' : 'seller') + (m.is_reported ? ' reported' : '');
+        bubble.appendChild(divWith('', m.body));
+        bubble.appendChild(divWith('meta', (m.sender_name || '退会したユーザー') + ' / ' + formatDateTime(m.created_at) + (m.is_reported ? ' / 通報されたメッセージ' : '')));
+        list.appendChild(bubble);
+      });
+      box.appendChild(divWith('sub', '取引のメッセージ全体。赤い枠が通報されたメッセージで、左側が通報された人の発言です。'));
+      box.appendChild(list);
+    }
+
+    var o = json.offender;
+    var ob = $('cdOffender');
+    ob.innerHTML = '';
+    if (!o) {
+      ob.textContent = '投稿した人は退会しています。';
+    } else {
+      ob.appendChild(divWith('reason', '投稿した人: ' + (o.display_name || '(表示名なし)') + (o.is_banned ? '(利用停止中)' : '')));
+      ob.appendChild(divWith('sub', 'ユーザー ' + o.id));
+      if (o.listings.length) {
+        ob.appendChild(divWith('sub', 'この人の出品(新しい順):'));
+        var ul = document.createElement('ul');
+        o.listings.forEach(function (l) {
+          var li = document.createElement('li');
+          li.textContent = l.title + (l.withdrawn_at ? '(削除済み)' : '(' + l.status + ')');
+          ul.appendChild(li);
+        });
+        ob.appendChild(ul);
+      }
+      if (o.is_banned) {
+        var unban = document.createElement('button');
+        unban.className = 'link';
+        unban.textContent = '利用停止を解除する';
+        unban.addEventListener('click', function () { submitUnban(o.id, unban); });
+        ob.appendChild(unban);
+      }
+    }
+
+    $('cdDecision').hidden = r.status !== 'open';
+    $('cdRemoveRow').hidden = r.target_type === 'user';
+    $('cdRemoveLabel').textContent = REMOVE_LABELS[r.target_type];
+    $('cdBan').disabled = !o || o.is_banned;
+  }
+
+  function updateResolveButton() {
+    $('cdResolve').disabled = !($('cdRemove').checked || $('cdBan').checked);
+  }
+  $('cdRemove').addEventListener('change', updateResolveButton);
+  $('cdBan').addEventListener('change', updateResolveButton);
+
+  function submitContentDecision(remove, ban, btn) {
+    var note = $('cdNote').value.trim();
+    $('cdActionError').hidden = true;
+    if (!note) { $('cdActionError').hidden = false; $('cdActionError').textContent = '判断の理由を入力してください。'; return; }
+    var originalText = btn.textContent;
+    $('cdResolve').disabled = true; $('cdDismiss').disabled = true;
+    btn.textContent = '処理中…';
+    callAdmin('resolve_content_report', { report_id: currentReport.report.id, remove: remove, ban: ban, note: note })
+      .then(function () { show('content'); loadContentReports(); })
+      .catch(function (err) {
+        $('cdActionError').hidden = false;
+        $('cdActionError').textContent = err.code === 'report_already_closed'
+          ? 'この通報は、すでに対応済みです。一覧を更新してください。'
+          : '失敗しました(' + err.message + ')。';
+      })
+      .finally(function () {
+        btn.textContent = originalText;
+        $('cdDismiss').disabled = false;
+        updateResolveButton();
+      });
+  }
+  $('cdResolve').addEventListener('click', function () {
+    submitContentDecision($('cdRemove').checked, $('cdBan').checked, $('cdResolve'));
+  });
+  $('cdDismiss').addEventListener('click', function () { submitContentDecision(false, false, $('cdDismiss')); });
+
+  function submitUnban(userId, btn) {
+    btn.disabled = true;
+    callAdmin('unban_user', { user_id: userId })
+      .then(function () { openContentReport(currentReport.report.id); })
+      .catch(function (err) { btn.disabled = false; btn.textContent = '解除できませんでした(' + err.message + ')'; });
+  }
+
+  $('backToContent').addEventListener('click', function () { show('content'); loadContentReports(); });
+  $('contentRefresh').addEventListener('click', function () { loadContentReports(); loadNgWords(); });
+
+  // 禁止語
+  function loadNgWords() {
+    callAdmin('list_ng_words')
+      .then(function (json) {
+        var list = $('ngList');
+        list.innerHTML = '';
+        (json.words || []).forEach(function (word) {
+          var chip = document.createElement('span');
+          chip.className = 'ng-chip';
+          chip.appendChild(textSpan('', word));
+          var remove = document.createElement('button');
+          remove.textContent = '×';
+          remove.setAttribute('aria-label', word + ' を外す');
+          remove.addEventListener('click', function () {
+            remove.disabled = true;
+            callAdmin('remove_ng_word', { word: word }).then(loadNgWords).catch(showNgError);
+          });
+          chip.appendChild(remove);
+          list.appendChild(chip);
+        });
+      })
+      .catch(showNgError);
+  }
+  function showNgError(err) {
+    $('ngError').hidden = false;
+    $('ngError').textContent = err.code === 'invalid_word' ? '2〜30文字で入力してください。' : '失敗しました(' + err.message + ')。';
+  }
+  $('ngAdd').addEventListener('click', function () {
+    var word = $('ngInput').value.trim();
+    if (!word) return;
+    $('ngError').hidden = true;
+    $('ngAdd').disabled = true;
+    callAdmin('add_ng_word', { word: word })
+      .then(function () { $('ngInput').value = ''; loadNgWords(); })
+      .catch(showNgError)
+      .finally(function () { $('ngAdd').disabled = false; });
+  });
+  $('ngInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('ngAdd').click(); });
 
   // ---- 起動 ----
   var saved = getCred();
