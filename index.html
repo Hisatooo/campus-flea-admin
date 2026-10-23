@@ -367,7 +367,7 @@
       <textarea id="reportNoteInput" placeholder="例: 偽物であることをメッセージと写真で確認した"></textarea>
       <div id="reportActionError" class="error-banner" hidden></div>
       <div class="btn-row">
-        <button class="danger" id="refundBtn">返金する(手数料を除いた額)</button>
+        <button class="danger" id="refundBtn">返金する(代金の全額)</button>
         <button class="ghost" id="dismissBtn">問題なしとして却下</button>
       </div>
     </div>
@@ -1057,7 +1057,7 @@
     }
     currentReportDealId = deal.id;
     el.reportDetailTitle.textContent = deal.listing_title || '(出品タイトル不明)';
-    el.reportDetailPrice.textContent = yen(deal.price_jpy) + '(手数料 ' + yen(deal.fee_jpy) + ' を除くと ' + yen(deal.price_jpy - deal.fee_jpy) + ')';
+    el.reportDetailPrice.textContent = yen(deal.price_jpy) + '(返金すると、購入者に全額を返し、手数料 ' + yen(deal.fee_jpy) + ' は受け取らない)';
     el.reportDetailBuyer.textContent = deal.buyer_display_name || '(表示名未設定)';
     el.reportDetailSeller.textContent = deal.seller_display_name || '(表示名未設定)';
     renderMessageList(el.reportMessages, messages, deal.buyer_id);
