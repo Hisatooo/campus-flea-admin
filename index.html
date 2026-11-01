@@ -1273,7 +1273,11 @@
     head.appendChild(spanWith('name', uni.name));
     head.appendChild(spanWith('meta', uni.type + '・' + uni.prefecture));
     head.appendChild(spanWith('pill', uni.is_enabled ? '対応済み' : '未対応'));
-    head.appendChild(spanWith('wish', uni.wish_count + '人'));
+    if (!uni.is_enabled && (uni.waitlist_count || uni.opens_at)) {
+      head.appendChild(spanWith('wish', '参加 ' + uni.waitlist_count + '/' + uni.waitlist_goal +
+        (uni.opens_at ? '・解放 ' + formatDateTime(uni.opens_at) : '')));
+    }
+    head.appendChild(spanWith('wish', 'ウェイトリスト ' + uni.wish_count + '人'));
     head.addEventListener('click', function () { toggleEdit(row, uni); });
     row.appendChild(head);
     return row;
@@ -1334,7 +1338,7 @@
     section.className = 'wish-emails';
     var label = document.createElement('label');
     label.className = 'field';
-    label.textContent = '対応したら知らせてほしい人のメールアドレス';
+    label.textContent = 'ウェイトリストのメールアドレス(大学を解放したら、ここに知らせる)';
     var status = spanWith('sub', '読み込み中…');
     var list = document.createElement('ul');
     var copyBtn = document.createElement('button');
@@ -1376,8 +1380,11 @@
   // ---- 3d. 出品・ユーザー・メッセージの通報 ----
   // 利用者が書いた文(出品文・メッセージ・通報の詳細・表示名)は、すべて textContent で入れる(XSS 対策)。
   var $ = function (id) { return document.getElementById(id); };
-  var TARGET_LABELS = { listing: '出品', user: 'ユーザー', message: 'メッセージ' };
-  var REMOVE_LABELS = { listing: 'この出品を削除する(出品者も元に戻せない)', message: 'このメッセージを削除する', user: '' };
+  var TARGET_LABELS = { listing: '出品', user: 'ユーザー', message: 'メッセージ', waitlist_message: 'オープンチャットの発言' };
+  var REMOVE_LABELS = {
+    listing: 'この出品を削除する(出品者も元に戻せない)', message: 'このメッセージを削除する',
+    waitlist_message: 'この発言を削除する', user: '',
+  };
   var RESPONSE_HOURS = 24;
   var currentReport = null;
 
@@ -1482,7 +1489,7 @@
         wrap.appendChild(divWith('sub', l.withdrawn_at ? '状態: 削除済み' : '状態: ' + l.status));
       }
       box.appendChild(wrap);
-    } else if (r.target_type === 'message') {
+    } else if (r.target_type === 'message' || r.target_type === 'waitlist_message') {
       var list = document.createElement('div');
       list.className = 'messages';
       if (!json.conversation.length) list.textContent = 'このメッセージは見つかりません(削除済み)。';
@@ -1494,7 +1501,9 @@
         bubble.appendChild(divWith('meta', (m.sender_name || '退会したユーザー') + ' / ' + formatDateTime(m.created_at) + (m.is_reported ? ' / 通報されたメッセージ' : '')));
         list.appendChild(bubble);
       });
-      box.appendChild(divWith('sub', '取引のメッセージ全体。赤い枠が通報されたメッセージで、左側が通報された人の発言です。'));
+      box.appendChild(divWith('sub', r.target_type === 'message'
+        ? '取引のメッセージ全体。赤い枠が通報されたメッセージで、左側が通報された人の発言です。'
+        : 'オープンチャットの、通報された発言までの直近の発言。赤い枠が通報された発言で、左側が通報された人の発言です。'));
       box.appendChild(list);
     }
 
