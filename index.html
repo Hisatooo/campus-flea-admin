@@ -200,7 +200,7 @@
   .stat-row .bar span { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
   .stat-row .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .stat-row .num small { color: var(--muted); margin-left: 4px; }
-  .stat-note { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+  .stat-note { font-size: 12px; color: var(--muted); margin: 0 0 16px; white-space: pre-line; }
   @media (max-width: 520px) {
     .stat-row { grid-template-columns: minmax(0, 1fr) 7.5em; }
     .stat-row .bar { grid-column: 1 / -1; order: 3; }
@@ -1173,7 +1173,9 @@
     el.statsNote.hidden = false;
     el.statsNote.textContent = '集計: ' + new Date(json.generated_at).toLocaleString('ja-JP')
       + '。審査用アカウントと、プロフィール未設定の利用者は含みません。'
-      + SMALL_CELL + '人未満の区分は、社外に出す資料では伏せてください(個人が推測されるため)。';
+      + SMALL_CELL + '人未満の区分は、社外に出す資料では伏せてください(個人が推測されるため)。'
+      + 'DAU・WAU・MAU は、その期間にアプリを開いた人の数です。'
+      + (json.notes || []).map(function (note) { return '\n' + note; }).join('');
     var tiles = divWith('stat-tiles');
     (json.summary || []).forEach(function (item) {
       var tile = divWith('stat-tile');
