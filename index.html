@@ -192,6 +192,21 @@
   .stat-tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .stat-tile .label { font-size: 12px; color: var(--muted); }
   .stat-tile .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cmp-form select, .cmp-form input[type="date"], .cmp-form input[type="text"] {
+    font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; max-width: 100%;
+  }
+  .cmp-form { margin-bottom: 18px; }
+  .cmp-form .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .cmp-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .cmp-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-all; }
+  .cmp-scroll { overflow-x: auto; margin-bottom: 18px; }
+  .cmp-preview { font-size: 13px; margin-top: 6px; }
+  .cmp-ok { color: var(--success); }
+  .cmp-bad { color: var(--danger); font-weight: 600; }
+  button.mini { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); margin: 2px 4px 2px 0; }
+  button.mini:disabled { opacity: 0.45; cursor: default; }
   .stat-section { margin-bottom: 22px; }
   .stat-section h3 { font-size: 14px; margin: 0 0 8px; }
   .stat-row { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 7.5em; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
@@ -241,6 +256,7 @@
     <button id="navContent">通報<span class="count" id="countContent"></span></button>
     <button id="navUniversities">大学の要望</button>
     <button id="navStats">統計</button>
+    <button id="navCampaign">キャンペーン</button>
   </nav>
 
   <!-- 1. シークレット入力 / Googleログイン -->
@@ -448,6 +464,15 @@
       <button class="ghost" id="statsCopy">表をコピー（TSV）</button>
     </div>
   </section>
+
+  <!-- 6. キャンペーン(コードの全文は画面にも通信にも出ない。下 4 桁だけ) -->
+  <section id="screen-campaign" class="card" hidden>
+    <div class="tabs" id="cmpTabs"></div>
+    <div id="cmpLoading" class="empty"><span class="spinner"></span> 読み込み中…</div>
+    <div id="cmpError" class="error-banner" hidden></div>
+    <div id="cmpBody"></div>
+    <div class="btn-row"><button class="ghost" id="cmpRefresh">更新</button></div>
+  </section>
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -473,6 +498,13 @@
     statsBody: document.getElementById('statsBody'),
     statsRefresh: document.getElementById('statsRefresh'),
     statsCopy: document.getElementById('statsCopy'),
+    navCampaign: document.getElementById('navCampaign'),
+    screenCampaign: document.getElementById('screen-campaign'),
+    cmpTabs: document.getElementById('cmpTabs'),
+    cmpLoading: document.getElementById('cmpLoading'),
+    cmpError: document.getElementById('cmpError'),
+    cmpBody: document.getElementById('cmpBody'),
+    cmpRefresh: document.getElementById('cmpRefresh'),
     screenUni: document.getElementById('screen-uni'),
     uniLoading: document.getElementById('uniLoading'),
     uniError: document.getElementById('uniError'),
@@ -581,15 +613,20 @@
     el.mainNav.hidden = screen === 'secret';
     el.screenStats.hidden = screen !== 'stats';
     el.screenContent.hidden = screen !== 'content';
+    el.screenCampaign.hidden = screen !== 'campaign';
+    el.navCampaign.classList.toggle('active', screen === 'campaign');
     el.screenContentDetail.hidden = screen !== 'content-detail';
     var isContent = screen === 'content' || screen === 'content-detail';
     el.navUniversities.classList.toggle('active', screen === 'uni');
     el.navStats.classList.toggle('active', screen === 'stats');
     el.navContent.classList.toggle('active', isContent);
-    el.navReview.classList.toggle('active', screen !== 'uni' && screen !== 'stats' && !isContent);
+    el.navReview.classList.toggle('active', screen !== 'uni' && screen !== 'stats' && screen !== 'campaign' && !isContent);
     if (isContent) {
       el.pageTitle.textContent = '通報';
       el.pageSub.textContent = '出品・ユーザー・メッセージの通報。届いてから24時間以内に対応します(規約 第16条)。';
+    } else if (screen === 'campaign') {
+      el.pageTitle.textContent = 'キャンペーン';
+      el.pageSub.textContent = 'クリスマスキャンペーンの在庫・抽選・不正対応。ギフトコードの全文は表示されません(下 4 桁のみ)。';
     } else if (screen === 'stats') {
       el.pageTitle.textContent = '統計';
       el.pageSub.textContent = '利用者の属性と、出品・取引の集計。個人の情報は含みません。';
@@ -605,6 +642,7 @@
   el.navReview.addEventListener('click', function () { show('list'); renderActiveTab(); });
   el.navUniversities.addEventListener('click', function () { show('uni'); loadUniversities(); });
   el.navStats.addEventListener('click', function () { show('stats'); loadStats(); });
+  el.navCampaign.addEventListener('click', function () { show('campaign'); loadCampaign(); });
   el.navContent.addEventListener('click', function () { show('content'); loadContentReports(); loadNgWords(); });
 
   function callAdmin(action, extra) {
@@ -1232,6 +1270,364 @@
       .catch(function () { el.statsCopy.textContent = 'コピーできませんでした'; })
       .finally(function () { setTimeout(function () { el.statsCopy.textContent = '表をコピー（TSV）'; }, 1600); });
   });
+
+  // ---- 6. キャンペーン ----
+  // コードの全文は、画面にも通信にも出ない(サーバーが下 4 桁しか返さない)。登録フォームは送信と同時に空にする。
+  var CMP_TABS = [['stats', '概要'], ['codes', 'ギフトコード'], ['lottery', '抽選'], ['fraud', '不正対応'], ['log', '操作の履歴']];
+  var STOCK_MIN = { amazon_10000: 2, amazon_1000: 10 }; // 未割当がこれを下回ったら赤
+  var PRIZE_LABELS = { amazon_10000: 'Amazon 1万円', amazon_1000: 'Amazon 1,000円' };
+  var CODE_STATUS_LABELS = { unassigned: '未割当', assigned: '割当済', revealed: '表示済', stopped: '停止', no_reassign: '再割当不可' };
+  var RESULT_STATUS_LABELS = { won: '当選', revoked: '取消', declined: '辞退' };
+  var REALLOC_REASONS = {
+    deadline_passed: '繰り上げの期限を過ぎています', not_vacated: '取消・辞退になっていない当選です',
+    already_filled: 'すでに繰り上げ済みです', no_code: '未割当のコードがありません',
+    no_candidate: '繰り上げられる人がいません',
+  };
+  var cmpTab = 'stats';
+
+  function node(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function labelOf(map, key) { return map[key] || key || ''; }
+  function shortId(id) { return id ? String(id).slice(0, 8) : ''; }
+
+  /** rows は文字列か DOM ノードの配列の配列。 */
+  function cmpTable(headers, rows) {
+    var wrap = node('div', 'cmp-scroll');
+    var table = node('table', 'cmp-table');
+    var head = node('tr');
+    headers.forEach(function (h) { head.appendChild(node('th', null, h)); });
+    table.appendChild(head);
+    rows.forEach(function (cells) {
+      var tr = node('tr');
+      cells.forEach(function (c) {
+        var td = node('td');
+        if (c && c.nodeType) td.appendChild(c); else td.textContent = c == null ? '' : String(c);
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    return wrap;
+  }
+  function cmpSection(title) { var box = node('div', 'stat-section'); box.appendChild(node('h3', null, title)); return box; }
+  function cmpDate(iso) { return iso ? formatDateTime(iso) : ''; }
+
+  /** 未割当の在庫が足りない景品の注意書き(なければ空配列)。 */
+  function stockWarnings(inventory) {
+    return (inventory || []).filter(function (p) {
+      return STOCK_MIN[p.kind] != null && Number(p.unassigned) < STOCK_MIN[p.kind];
+    }).map(function (p) {
+      return labelOf(PRIZE_LABELS, p.kind) + ' の未割当コードが ' + p.unassigned + ' 件です(' + STOCK_MIN[p.kind] + ' 件以上必要)。';
+    });
+  }
+  /** 在庫が足りなければ赤い帯を box に描く。 */
+  function renderStockBanner(box, inventory) {
+    box.innerHTML = '';
+    var warnings = stockWarnings(inventory);
+    if (warnings.length === 0) return;
+    var banner = node('div', 'error-banner', '在庫が足りません。\n' + warnings.join('\n'));
+    banner.style.whiteSpace = 'pre-line';
+    box.appendChild(banner);
+  }
+
+  function cmpTabs() {
+    el.cmpTabs.innerHTML = '';
+    CMP_TABS.forEach(function (t) {
+      var b = node('button', 'tab' + (t[0] === cmpTab ? ' active' : ''), t[1]);
+      b.addEventListener('click', function () { cmpTab = t[0]; loadCampaign(); });
+      el.cmpTabs.appendChild(b);
+    });
+  }
+
+  var cmpLoadSeq = 0;
+  function loadCampaign() {
+    var seq = ++cmpLoadSeq;
+    cmpTabs();
+    el.cmpLoading.hidden = false;
+    el.cmpError.hidden = true;
+    el.cmpBody.innerHTML = '';
+    var loaders = { stats: cmpLoadStats, codes: cmpLoadCodes, lottery: cmpLoadLottery, fraud: cmpLoadFraud, log: cmpLoadLog };
+    loaders[cmpTab]()
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        if (seq !== cmpLoadSeq) return;
+        el.cmpError.hidden = false;
+        el.cmpError.textContent = '読み込みに失敗しました(' + err.message + ')。';
+      })
+      .finally(function () { if (seq === cmpLoadSeq) el.cmpLoading.hidden = true; });
+  }
+  el.cmpRefresh.addEventListener('click', loadCampaign);
+
+  /** 変更系の操作。理由(note)が空なら送らない。 */
+  function cmpMutate(action, params, note, outEl, onDone) {
+    var trimmed = (note || '').trim();
+    if (!trimmed) { outEl.textContent = '理由を入力してください。'; outEl.className = 'cmp-preview cmp-bad'; return Promise.resolve(); }
+    outEl.textContent = '実行中…';
+    outEl.className = 'cmp-preview';
+    return callAdmin(action, Object.assign({}, params, { note: trimmed }))
+      .then(function (json) { onDone(json); })
+      .catch(function (err) {
+        if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+        outEl.textContent = '失敗しました(' + err.message + ')。';
+        outEl.className = 'cmp-preview cmp-bad';
+      });
+  }
+
+  // -- 概要 --
+  function cmpLoadStats() {
+    return callAdmin('campaign_stats').then(function (s) {
+      var t = s.tickets || {};
+      var ev = s.events || {};
+      var bannerBox = node('div');
+      renderStockBanner(bannerBox, s.inventory);
+      el.cmpBody.appendChild(bannerBox);
+      var tiles = divWith('stat-tiles');
+      [['参加者', s.participants], ['有効な券', t.valid], ['無効な券', t.invalid], ['発行した券', t.issued],
+       ['新規登録の券', t.registration], ['招待の券', t.referral],
+       ['バナーのタップ', ev.banner_tap], ['ページ表示', ev.page_view]].forEach(function (item) {
+        var tile = divWith('stat-tile');
+        tile.appendChild(divWith('label', item[0]));
+        tile.appendChild(divWith('value', Number(item[1] || 0).toLocaleString('ja-JP')));
+        tiles.appendChild(tile);
+      });
+      el.cmpBody.appendChild(tiles);
+      var sched = cmpSection('日程と抽選の状態');
+      sched.appendChild(cmpTable(['項目', '値'], [
+        ['開始', cmpDate(s.starts_at)], ['終了', cmpDate(s.ends_at)], ['抽選', cmpDate(s.draw_at)],
+        ['繰り上げの期限', cmpDate(s.realloc_until)], ['抽選の状態', s.draw_status || ''], ['抽選のエラー', s.draw_error || 'なし'],
+      ]));
+      el.cmpBody.appendChild(sched);
+      var inv = cmpSection('ギフトコードの在庫');
+      inv.appendChild(cmpTable(['景品', '枠', '未割当', '割当済', '表示済', '停止', '再割当不可'], (s.inventory || []).map(function (p) {
+        var low = stockWarnings([p]).length > 0;
+        var un = node('span', low ? 'cmp-bad' : null, String(p.unassigned));
+        return [labelOf(PRIZE_LABELS, p.kind), p.slots, un, p.assigned, p.revealed, p.stopped, p.no_reassign];
+      })));
+      el.cmpBody.appendChild(inv);
+      var top = cmpSection('券が多い人(上位 20)');
+      top.appendChild(cmpTable(['ユーザー', '券', 'うち招待'], (s.top_users || []).map(function (u) {
+        return [u.user_id, u.tickets, u.referral];
+      })));
+      el.cmpBody.appendChild(top);
+    });
+  }
+
+  // -- ギフトコード --
+  function cmpAddForm(onAdded) {
+    var form = node('div', 'cmp-form');
+    form.appendChild(node('h3', null, 'コードを登録'));
+    var row = node('div', 'row');
+    var kind = node('select');
+    Object.keys(PRIZE_LABELS).forEach(function (k) {
+      var o = node('option', null, PRIZE_LABELS[k]); o.value = k; kind.appendChild(o);
+    });
+    var expires = node('input'); expires.type = 'date';
+    row.appendChild(node('label', 'field', '額面')); row.appendChild(kind);
+    row.appendChild(node('label', 'field', '有効期限')); row.appendChild(expires);
+    form.appendChild(row);
+    form.appendChild(node('label', 'field', 'コード(1 行に 1 つ。最大 500 件)'));
+    var area = node('textarea');
+    area.setAttribute('autocomplete', 'off'); area.setAttribute('spellcheck', 'false');
+    form.appendChild(area);
+    var out = node('div', 'cmp-preview');
+    var btn = node('button', 'primary', '登録する');
+    btn.style.marginTop = '10px';
+    btn.addEventListener('click', function () {
+      var codes = area.value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+      if (codes.length === 0) { out.textContent = 'コードを入力してください。'; out.className = 'cmp-preview cmp-bad'; return; }
+      area.value = ''; // 送信と同時に消す。画面にコードを残さない
+      btn.disabled = true;
+      out.textContent = '登録中…'; out.className = 'cmp-preview';
+      callAdmin('campaign_add_codes', { prize_kind: kind.value, expires_on: expires.value || null, codes: codes })
+        .then(function (r) {
+          var dup = (r.duplicates || []).map(function (l) { return '…' + l; }).join('、');
+          var bad = (r.invalid || []).map(function (l) { return '…' + l; }).join('、');
+          out.textContent = '追加 ' + r.added + ' 件 / 重複 ' + (r.duplicates || []).length + ' 件' + (dup ? '(下 4 桁: ' + dup + ')' : '')
+            + ' / 形式エラー ' + (r.invalid || []).length + ' 件' + (bad ? '(下 4 桁: ' + bad + ')' : '');
+          out.className = 'cmp-preview ' + ((r.invalid || []).length ? 'cmp-bad' : 'cmp-ok');
+          onAdded();
+        })
+        .catch(function (err) {
+          if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+          out.textContent = '登録に失敗しました(' + err.message + ')。登録された分があるかもしれません。一覧を確認してから、残りを貼り直してください。';
+          out.className = 'cmp-preview cmp-bad';
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+    form.appendChild(btn);
+    form.appendChild(out);
+    return form;
+  }
+
+  function cmpLoadCodes() {
+    return Promise.all([callAdmin('campaign_stats'), callAdmin('campaign_list_codes')]).then(function (res) {
+      var bannerBox = node('div');
+      var listBox = node('div');
+      renderStockBanner(bannerBox, res[0].inventory);
+      el.cmpBody.appendChild(bannerBox);
+      // 登録の結果の文は残したまま、在庫と一覧だけ更新する
+      el.cmpBody.appendChild(cmpAddForm(function () {
+        Promise.all([callAdmin('campaign_stats'), callAdmin('campaign_list_codes')]).then(function (r2) {
+          renderStockBanner(bannerBox, r2[0].inventory);
+          listBox.innerHTML = '';
+          renderCodeList(listBox, r2[1].codes || []);
+        }).catch(function () {});
+      }));
+      el.cmpBody.appendChild(listBox);
+      renderCodeList(listBox, res[1].codes || []);
+    });
+  }
+
+  function renderCodeList(box, codes) {
+    box.appendChild(node('h3', null, 'コード一覧(' + codes.length + ' 件)'));
+    box.appendChild(node('label', 'field', '停止の理由(必須。入力すると「停止」が押せます)'));
+    var note = node('input'); note.type = 'text'; note.style.width = '100%';
+    box.appendChild(note);
+    var out = node('div', 'cmp-preview');
+    var stopButtons = [];
+    var rows = codes.map(function (c) {
+      var btn = node('button', 'mini', '停止');
+      btn.disabled = true;
+      btn.addEventListener('click', function () {
+        cmpMutate('campaign_stop_code', { code_id: c.id }, note.value, out, function () {
+          out.textContent = '停止しました(…' + c.last4 + ')。'; out.className = 'cmp-preview cmp-ok';
+          btn.disabled = true; btn.textContent = '停止済み';
+        });
+      });
+      if (c.status !== 'stopped') stopButtons.push(btn);
+      var status = node('span', 'pill' + (c.status === 'stopped' ? ' warn' : ''), labelOf(CODE_STATUS_LABELS, c.status));
+      return [labelOf(PRIZE_LABELS, c.prize_kind), '…' + c.last4, status, c.assigned_user_id || '', c.reveal_count,
+        c.expires_on || '', c.status === 'stopped' ? '' : btn];
+    });
+    note.addEventListener('input', function () {
+      var ok = note.value.trim() !== '';
+      stopButtons.forEach(function (b) { if (b.textContent === '停止') b.disabled = !ok; });
+    });
+    box.appendChild(out);
+    box.appendChild(cmpTable(['景品', '下 4 桁', '状態', '割当先', '表示回数', '有効期限', ''], rows));
+  }
+
+  // -- 抽選 --
+  function cmpLoadLottery() {
+    return Promise.all([callAdmin('campaign_snapshot'), callAdmin('campaign_results')]).then(function (res) {
+      var results = cmpSection('当選者(' + (res[1].results || []).length + ' 件)');
+      results.appendChild(cmpTable(['枠', '景品', 'ユーザー', '状態', 'コード', '当選日時', '取消の理由'], (res[1].results || []).map(function (r) {
+        return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), r.user_id, resultPill(r),
+          r.code ? '…' + r.code.last4 + '(' + labelOf(CODE_STATUS_LABELS, r.code.status) + '・表示 ' + r.code.reveal_count + ' 回)' : '',
+          cmpDate(r.won_at), r.revoke_reason || ''];
+      })));
+      el.cmpBody.appendChild(results);
+      var snap = cmpSection('抽選の材料(順位順。券の枚数と乱数)');
+      snap.appendChild(cmpTable(['順位', 'ユーザー', '券', '乱数', '記録日時'], (res[0].snapshot || []).map(function (s) {
+        return [s.rank, s.user_id, s.ticket_count, s.rand_u, cmpDate(s.taken_at)];
+      })));
+      el.cmpBody.appendChild(snap);
+    });
+  }
+  function resultPill(r) { return node('span', 'pill' + (r.status === 'won' ? ' ok' : ' warn'), labelOf(RESULT_STATUS_LABELS, r.status)); }
+
+  // -- 不正対応 --
+  function cmpLoadFraud() {
+    return callAdmin('campaign_results').then(function (res) {
+      el.cmpBody.appendChild(node('p', 'stat-note', 'どの操作も、理由が必須です(操作者と一緒に履歴へ残ります)。繰り上げは「下見」で候補を確認してから「実行」を押せます。'));
+      var noteBox = node('div', 'cmp-form');
+      noteBox.appendChild(node('label', 'field', '理由(必須)'));
+      var note = node('textarea');
+      noteBox.appendChild(note);
+      el.cmpBody.appendChild(noteBox);
+
+      var gated = []; // 理由が入るまで押せないボタン。extra は追加の条件
+      function gate(btn, extra) { btn.disabled = true; gated.push({ btn: btn, extra: extra || function () { return true; } }); return btn; }
+      function refreshGates() {
+        var ok = note.value.trim() !== '';
+        gated.forEach(function (g) { g.btn.disabled = !(ok && g.extra()); });
+      }
+      note.addEventListener('input', refreshGates);
+
+      var ticketBox = cmpSection('券の無効化');
+      var tRow = node('div', 'cmp-form');
+      var ticketId = node('input'); ticketId.type = 'text'; ticketId.placeholder = '券の ID(uuid)'; ticketId.style.width = '100%';
+      var tOut = node('div', 'cmp-preview');
+      var tBtn = gate(node('button', 'danger', '券を無効にする'), function () { return ticketId.value.trim() !== ''; });
+      ticketId.addEventListener('input', refreshGates);
+      tBtn.addEventListener('click', function () {
+        cmpMutate('campaign_invalidate_ticket', { ticket_id: ticketId.value.trim() }, note.value, tOut, function (r) {
+          tOut.textContent = '無効にしました(' + r.affected + ' 枚。新規登録の券なら、同じ人の招待の券も含みます)。'; tOut.className = 'cmp-preview cmp-ok';
+        });
+      });
+      tRow.appendChild(ticketId); tRow.appendChild(tBtn); tRow.appendChild(tOut);
+      ticketBox.appendChild(tRow);
+      el.cmpBody.appendChild(ticketBox);
+
+      var box = cmpSection('当選の取消・辞退・繰り上げ');
+      var rows = (res.results || []).map(function (r) { return resultActionRow(r, note, gate, refreshGates); });
+      box.appendChild(cmpTable(['枠', '景品', 'ユーザー', '状態', 'コード', '操作'], rows));
+      el.cmpBody.appendChild(box);
+    });
+  }
+
+  function resultActionRow(r, note, gate, refreshGates) {
+    var out = node('div', 'cmp-preview');
+    var cell = node('div');
+    var reload = function () { setTimeout(loadCampaign, 600); };
+    function mutateBtn(label, action, okText) {
+      var b = gate(node('button', 'mini', label));
+      b.addEventListener('click', function () {
+        cmpMutate(action, { result_id: r.id }, note.value, out, function () {
+          out.textContent = okText; out.className = 'cmp-preview cmp-ok'; reload();
+        });
+      });
+      cell.appendChild(b);
+    }
+    if (r.status === 'won') {
+      mutateBtn('取消', 'campaign_revoke_result', '取り消しました。');
+      mutateBtn('辞退を受理', 'campaign_accept_decline', '辞退として受理しました。');
+    }
+    if (r.status === 'revoked' || r.status === 'declined') {
+      var previewed = null; // 下見の結果。ok の時だけ「実行」が押せる
+      var preview = node('button', 'mini', '下見');
+      var exec = gate(node('button', 'mini', '実行'), function () { return previewed !== null && previewed.ok === true; });
+      preview.addEventListener('click', function () {
+        previewed = null; refreshGates();
+        out.textContent = '確認中…'; out.className = 'cmp-preview';
+        callAdmin('campaign_realloc_preview', { result_id: r.id }).then(function (chk) {
+          previewed = chk;
+          if (chk.ok) { out.textContent = '候補: ' + chk.candidate_user_id + ' に、未割当のコード 1 件を割り当てます。'; out.className = 'cmp-preview cmp-ok'; }
+          else { out.textContent = '繰り上げできません: ' + labelOf(REALLOC_REASONS, chk.reason); out.className = 'cmp-preview cmp-bad'; }
+          refreshGates();
+        }).catch(function (err) {
+          if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+          out.textContent = '下見に失敗しました(' + err.message + ')。'; out.className = 'cmp-preview cmp-bad';
+        });
+      });
+      exec.addEventListener('click', function () {
+        exec.disabled = true;
+        cmpMutate('campaign_realloc_execute', { result_id: r.id }, note.value, out, function (res) {
+          previewed = null;
+          if (res.ok) { out.textContent = '繰り上げました(' + res.candidate_user_id + ')。'; out.className = 'cmp-preview cmp-ok'; reload(); }
+          else { out.textContent = '繰り上げできませんでした: ' + labelOf(REALLOC_REASONS, res.reason); out.className = 'cmp-preview cmp-bad'; }
+          refreshGates();
+        });
+      });
+      cell.appendChild(preview); cell.appendChild(exec);
+    }
+    cell.appendChild(out);
+    return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), r.user_id, resultPill(r),
+      r.code ? '…' + r.code.last4 + '(' + labelOf(CODE_STATUS_LABELS, r.code.status) + ')' : '', cell];
+  }
+
+  // -- 操作の履歴 --
+  function cmpLoadLog() {
+    return callAdmin('campaign_actions').then(function (res) {
+      el.cmpBody.appendChild(cmpTable(['日時', '操作', '対象', '操作者', '理由'], (res.actions || []).map(function (a) {
+        return [cmpDate(a.created_at), a.action, a.target_type + ' ' + shortId(a.target_id), a.actor, a.note];
+      })));
+    });
+  }
 
   // ---- 4. 大学の要望 ----
   var openUniRowId = null; // 一度に1件だけ編集パネルを開く
