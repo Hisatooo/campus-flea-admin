@@ -1284,6 +1284,8 @@
     no_candidate: '繰り上げられる人がいません',
   };
   var cmpTab = 'stats';
+  var cmpPrefillUser = null; // 他のタブで押したユーザー ID。不正対応タブが開いたら入る
+  var cmpFraudFill = null;   // 不正対応タブが開いている間だけ、ユーザー ID を入れて券を表示する関数
 
   function node(tag, cls, text) {
     var n = document.createElement(tag);
@@ -1314,6 +1316,17 @@
     return wrap;
   }
   function cmpSection(title) { var box = node('div', 'stat-section'); box.appendChild(node('h3', null, title)); return box; }
+  /** ユーザー ID。押すと不正対応タブの「券を探す」に入る。 */
+  function userLink(id) {
+    if (!id) return '';
+    var b = node('button', 'link', id);
+    b.style.wordBreak = 'break-all'; b.style.textAlign = 'left'; b.style.fontSize = '13px';
+    b.addEventListener('click', function () {
+      if (cmpTab === 'fraud' && cmpFraudFill) { cmpFraudFill(id); return; }
+      cmpPrefillUser = id; cmpTab = 'fraud'; loadCampaign();
+    });
+    return b;
+  }
   function cmpDate(iso) { return iso ? formatDateTime(iso) : ''; }
 
   /** 未割当の在庫が足りない景品の注意書き(なければ空配列)。 */
@@ -1346,6 +1359,7 @@
   var cmpLoadSeq = 0;
   function loadCampaign() {
     var seq = ++cmpLoadSeq;
+    cmpFraudFill = null;
     cmpTabs();
     el.cmpLoading.hidden = false;
     el.cmpError.hidden = true;
@@ -1410,7 +1424,7 @@
       el.cmpBody.appendChild(inv);
       var top = cmpSection('券が多い人(上位 20)');
       top.appendChild(cmpTable(['ユーザー', '券', 'うち招待'], (s.top_users || []).map(function (u) {
-        return [u.user_id, u.tickets, u.referral];
+        return [userLink(u.user_id), u.tickets, u.referral];
       })));
       el.cmpBody.appendChild(top);
     });
@@ -1516,14 +1530,14 @@
     return Promise.all([callAdmin('campaign_snapshot'), callAdmin('campaign_results')]).then(function (res) {
       var results = cmpSection('当選者(' + (res[1].results || []).length + ' 件)');
       results.appendChild(cmpTable(['枠', '景品', 'ユーザー', '状態', 'コード', '当選日時', '取消の理由'], (res[1].results || []).map(function (r) {
-        return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), r.user_id, resultPill(r),
+        return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), userLink(r.user_id), resultPill(r),
           r.code ? '…' + r.code.last4 + '(' + labelOf(CODE_STATUS_LABELS, r.code.status) + '・表示 ' + r.code.reveal_count + ' 回)' : '',
           cmpDate(r.won_at), r.revoke_reason || ''];
       })));
       el.cmpBody.appendChild(results);
       var snap = cmpSection('抽選の材料(順位順。券の枚数と乱数)');
       snap.appendChild(cmpTable(['順位', 'ユーザー', '券', '乱数', '記録日時'], (res[0].snapshot || []).map(function (s) {
-        return [s.rank, s.user_id, s.ticket_count, s.rand_u, cmpDate(s.taken_at)];
+        return [s.rank, userLink(s.user_id), s.ticket_count, s.rand_u, cmpDate(s.taken_at)];
       })));
       el.cmpBody.appendChild(snap);
     });
@@ -1548,20 +1562,42 @@
       }
       note.addEventListener('input', refreshGates);
 
-      var ticketBox = cmpSection('券の無効化');
-      var tRow = node('div', 'cmp-form');
-      var ticketId = node('input'); ticketId.type = 'text'; ticketId.placeholder = '券の ID(uuid)'; ticketId.style.width = '100%';
+      var ticketBox = cmpSection('券の無効化(ユーザーの券を探す)');
+      var tForm = node('div', 'cmp-form');
+      var userInput = node('input'); userInput.type = 'text'; userInput.placeholder = 'ユーザー ID(uuid)。一覧のユーザー ID を押すと入ります'; userInput.style.width = '100%';
+      var findBtn = node('button', 'ghost', '券を表示');
       var tOut = node('div', 'cmp-preview');
-      var tBtn = gate(node('button', 'danger', '券を無効にする'), function () { return ticketId.value.trim() !== ''; });
-      ticketId.addEventListener('input', refreshGates);
-      tBtn.addEventListener('click', function () {
-        cmpMutate('campaign_invalidate_ticket', { ticket_id: ticketId.value.trim() }, note.value, tOut, function (r) {
-          tOut.textContent = '無効にしました(' + r.affected + ' 枚。新規登録の券なら、同じ人の招待の券も含みます)。'; tOut.className = 'cmp-preview cmp-ok';
+      var tList = node('div');
+      function findTickets() {
+        var uid = userInput.value.trim();
+        if (!uid) return;
+        tList.innerHTML = ''; tOut.textContent = '読み込み中…'; tOut.className = 'cmp-preview';
+        callAdmin('campaign_user_tickets', { user_id: uid }).then(function (r) {
+          tOut.textContent = (r.tickets || []).length + ' 枚';
+          tList.appendChild(cmpTable(['種類', '発行日時', '状態', '無効の理由', ''], (r.tickets || []).map(function (t) {
+            var b = gate(node('button', 'mini', t.status === 'valid' ? '無効化' : '無効済み'), function () { return t.status === 'valid' && !b.dataset.done; });
+            b.addEventListener('click', function () {
+              cmpMutate('campaign_invalidate_ticket', { ticket_id: t.id }, note.value, tOut, function (res) {
+                tOut.textContent = '無効にしました(' + res.affected + ' 枚。新規登録の券なら、同じ人の招待の券も含みます)。'; tOut.className = 'cmp-preview cmp-ok';
+                b.dataset.done = '1'; b.textContent = '無効済み'; findTickets();
+              });
+            });
+            return [t.source_type === 'referral' ? '招待' : '新規登録', cmpDate(t.issued_at),
+              node('span', 'pill' + (t.status === 'valid' ? ' ok' : ' warn'), t.status === 'valid' ? '有効' : '無効'),
+              t.invalidation_reason || '', b];
+          })));
+          refreshGates();
+        }).catch(function (err) {
+          if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
+          tOut.textContent = '読み込みに失敗しました(' + err.message + ')。'; tOut.className = 'cmp-preview cmp-bad';
         });
-      });
-      tRow.appendChild(ticketId); tRow.appendChild(tBtn); tRow.appendChild(tOut);
-      ticketBox.appendChild(tRow);
+      }
+      findBtn.addEventListener('click', findTickets);
+      cmpFraudFill = function (uid) { userInput.value = uid; findTickets(); };
+      tForm.appendChild(userInput); tForm.appendChild(findBtn); tForm.appendChild(tOut); tForm.appendChild(tList);
+      ticketBox.appendChild(tForm);
       el.cmpBody.appendChild(ticketBox);
+      if (cmpPrefillUser) { var pre = cmpPrefillUser; cmpPrefillUser = null; cmpFraudFill(pre); }
 
       var box = cmpSection('当選の取消・辞退・繰り上げ');
       var rows = (res.results || []).map(function (r) { return resultActionRow(r, note, gate, refreshGates); });
@@ -1616,7 +1652,7 @@
       cell.appendChild(preview); cell.appendChild(exec);
     }
     cell.appendChild(out);
-    return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), r.user_id, resultPill(r),
+    return [r.slot_no, labelOf(PRIZE_LABELS, r.prize && r.prize.kind), userLink(r.user_id), resultPill(r),
       r.code ? '…' + r.code.last4 + '(' + labelOf(CODE_STATUS_LABELS, r.code.status) + ')' : '', cell];
   }
 
