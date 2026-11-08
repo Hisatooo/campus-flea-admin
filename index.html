@@ -1382,13 +1382,60 @@
     if (!trimmed) { outEl.textContent = '理由を入力してください。'; outEl.className = 'cmp-preview cmp-bad'; return Promise.resolve(); }
     outEl.textContent = '実行中…';
     outEl.className = 'cmp-preview';
+    outEl.dataset.code = '';
     return callAdmin(action, Object.assign({}, params, { note: trimmed }))
       .then(function (json) { onDone(json); })
       .catch(function (err) {
         if (err.code === 'unauthorized') { clearCred(); show('secret'); return; }
         outEl.textContent = '失敗しました(' + err.message + ')。';
         outEl.className = 'cmp-preview cmp-bad';
+        outEl.dataset.code = err.code || '';
       });
+  }
+
+  // -- 中止(規約 11 条: やむを得ない事情、または新規登録が 50 人未満)。抽選の前だけ。暗証番号はサーバーで確かめる --
+  var CANCEL_MIN_SIGNUPS = 50;
+  var CANCEL_ERRORS = {
+    wrong_pin: '暗証番号が違います。',
+    cancel_pin_not_configured: '暗証番号がサーバーに設定されていません(CAMPAIGN_CANCEL_PIN)。',
+    campaign_finalized: '抽選が終わっているため、中止できません。',
+  };
+  function cmpCancelForm(s) {
+    var box = cmpSection('キャンペーンの中止(規約 11 条)');
+    var signups = Number((s.tickets || {}).registration || 0);
+    box.appendChild(node('p', signups < CANCEL_MIN_SIGNUPS ? 'cmp-bad' : 'cmp-ok',
+      '新規登録の券: ' + signups.toLocaleString('ja-JP') + ' 枚(打ち切りの目安は ' + CANCEL_MIN_SIGNUPS + ' 人未満)'));
+    if (s.draw_status === 'cancelled') { box.appendChild(node('p', 'cmp-bad', '中止済みです。抽選は行われません。')); return box; }
+    if (s.draw_status === 'done') { box.appendChild(node('p', null, '抽選が終わっているため、中止できません。')); return box; }
+    box.appendChild(node('p', null, '中止すると抽選は行われず、アプリに「中止のお知らせ」が出ます。元に戻せません。'));
+    var form = node('div', 'cmp-form');
+    form.appendChild(node('label', 'field', '理由(記録されます)'));
+    var note = node('textarea');
+    note.value = '新規登録が50人に満たないため(規約11条)';
+    form.appendChild(note);
+    form.appendChild(node('label', 'field', '暗証番号'));
+    var pin = node('input');
+    pin.type = 'password'; pin.inputMode = 'numeric'; pin.setAttribute('autocomplete', 'off');
+    form.appendChild(pin);
+    var out = node('div', 'cmp-preview');
+    var btn = node('button', 'danger', 'キャンペーンを中止する');
+    btn.style.marginTop = '10px';
+    btn.addEventListener('click', function () {
+      if (!pin.value) { out.textContent = '暗証番号を入力してください。'; out.className = 'cmp-preview cmp-bad'; return; }
+      btn.disabled = true;
+      var given = pin.value;
+      pin.value = ''; // 画面に番号を残さない
+      cmpMutate('campaign_cancel', { pin: given }, note.value, out, function () {
+        out.textContent = '中止しました。'; out.className = 'cmp-preview cmp-ok';
+      }).finally(function () {
+        btn.disabled = false;
+        if (CANCEL_ERRORS[out.dataset.code]) out.textContent = CANCEL_ERRORS[out.dataset.code];
+      });
+    });
+    form.appendChild(btn);
+    form.appendChild(out);
+    box.appendChild(form);
+    return box;
   }
 
   // -- 概要 --
@@ -1415,6 +1462,7 @@
         ['繰り上げの期限', cmpDate(s.realloc_until)], ['抽選の状態', s.draw_status || ''], ['抽選のエラー', s.draw_error || 'なし'],
       ]));
       el.cmpBody.appendChild(sched);
+      el.cmpBody.appendChild(cmpCancelForm(s));
       var inv = cmpSection('ギフトコードの在庫');
       inv.appendChild(cmpTable(['景品', '枠', '未割当', '割当済', '表示済', '停止', '再割当不可'], (s.inventory || []).map(function (p) {
         var low = stockWarnings([p]).length > 0;
