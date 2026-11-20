@@ -1223,6 +1223,7 @@
     });
     el.statsBody.appendChild(tiles);
     (json.sections || []).forEach(function (section) {
+      if (section.columns) { el.statsBody.appendChild(statsTable(section)); return; }
       var rows = section.rows || [];
       var total = rows.reduce(function (sum, row) { return sum + row.count; }, 0);
       var max = rows.reduce(function (m, row) { return Math.max(m, row.count); }, 0);
@@ -1250,12 +1251,51 @@
     });
   }
 
+  /** 列が複数ある section(例: 大学別の出品・取引)。rows は {label, values}、values は columns と同じ順 */
+  function statsTable(section) {
+    var box = divWith('stat-section');
+    var title = document.createElement('h3');
+    title.textContent = section.title;
+    box.appendChild(title);
+    if (!section.rows.length) { box.appendChild(divWith('stat-note', 'まだデータがありません。')); return box; }
+    var table = document.createElement('table');
+    table.className = 'cmp-table';
+    var head = table.createTHead().insertRow();
+    [''].concat(section.columns).forEach(function (name, i) {
+      var th = document.createElement('th');
+      if (i > 0) th.style.textAlign = 'right';
+      th.textContent = name;
+      head.appendChild(th);
+    });
+    var body = table.createTBody();
+    section.rows.forEach(function (row) {
+      var tr = body.insertRow();
+      var name = tr.insertCell();
+      name.style.whiteSpace = 'nowrap';
+      name.textContent = row.label;
+      row.values.forEach(function (value) {
+        var td = tr.insertCell();
+        td.style.textAlign = 'right';
+        td.textContent = Number(value).toLocaleString('ja-JP');
+      });
+    });
+    var scroll = divWith('cmp-scroll');
+    scroll.appendChild(table);
+    box.appendChild(scroll);
+    return box;
+  }
+
   /** スプレッドシートに貼れる形(タブ区切り)。 */
   function statsAsTsv(json) {
     var lines = [['項目', '値'].join('\t')];
     (json.summary || []).forEach(function (item) { lines.push([item.label, item.value].join('\t')); });
     (json.sections || []).forEach(function (section) {
       lines.push('');
+      if (section.columns) {
+        lines.push([section.title].concat(section.columns).join('\t'));
+        section.rows.forEach(function (row) { lines.push([row.label].concat(row.values).join('\t')); });
+        return;
+      }
       lines.push([section.title, '人数・件数'].join('\t'));
       (section.rows || []).forEach(function (row) { lines.push([row.label, row.count].join('\t')); });
     });
