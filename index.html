@@ -1276,7 +1276,7 @@
       row.values.forEach(function (value) {
         var td = tr.insertCell();
         td.style.textAlign = 'right';
-        td.textContent = Number(value).toLocaleString('ja-JP');
+        td.textContent = value === null ? '—' : Number(value).toLocaleString('ja-JP'); // null = 対象が0件で率を出せない
       });
     });
     var scroll = divWith('cmp-scroll');
