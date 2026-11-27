@@ -1907,12 +1907,12 @@
   var $ = function (id) { return document.getElementById(id); };
   var TARGET_LABELS = {
     listing: '出品', user: 'ユーザー', message: 'メッセージ', waitlist_message: 'オープンチャットの発言',
-    listing_comment: '商品ページのコメント', review: '評価の一言',
+    listing_comment: '商品ページのコメント', review: '評価の一言', wanted_post: '探してます',
   };
   var REMOVE_LABELS = {
     listing: 'この出品を削除する(出品者も元に戻せない)', message: 'このメッセージを削除する',
     waitlist_message: 'この発言を削除する', listing_comment: 'このコメントを削除する',
-    review: 'この一言を非表示にする(星の評価はそのまま)', user: 'アイコンの写真を外して、プリセットに戻す',
+    review: 'この一言を非表示にする(星の評価はそのまま)', wanted_post: 'この「探してます」を非表示にする(書いた人の一覧からも消える)', user: 'アイコンの写真を外して、プリセットに戻す',
   };
   var CONVERSATION_NOTES = {
     message: '取引のメッセージ全体。赤い枠が通報されたメッセージで、左側が通報された人の発言です。',
@@ -2050,6 +2050,20 @@
         rwrap.appendChild(divWith('sub', '星 ' + rv.rating + ' / ' + formatDateTime(rv.created_at) + (rv.hidden_at ? ' / 非表示中' : '')));
       }
       box.appendChild(rwrap);
+    } else if (r.target_type === 'wanted_post') {
+      var wp = json.wanted_post;
+      var wwrap = document.createElement('div');
+      wwrap.className = 'report-box';
+      if (!wp) {
+        wwrap.textContent = 'この「探してます」は見つかりません(削除済み)。';
+      } else {
+        wwrap.appendChild(divWith('', wp.title));
+        var priceLabels = { '500': '〜500円', '1000': '〜1,000円', '3000': '〜3,000円', '5000': '〜5,000円', more: '5,000円〜' };
+        var state = wp.status === 'hidden' ? ' / 非表示中' : wp.status === 'found' ? ' / 見つかった' :
+          (new Date(wp.closes_at) < new Date() ? ' / 期限切れ' : ' / 公開中');
+        wwrap.appendChild(divWith('sub', (priceLabels[wp.price_hint] || '値段は相談') + ' / ' + formatDateTime(wp.created_at) + state));
+      }
+      box.appendChild(wwrap);
     } else if (r.target_type === 'user') {
       var uwrap = document.createElement('div');
       uwrap.className = 'report-box';
