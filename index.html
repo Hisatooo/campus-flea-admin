@@ -688,7 +688,10 @@
     return { text: '残り約' + diffH + '時間(' + dateText + 'まで)', closed: false };
   }
 
-  var REASON_LABELS = { spam: 'スパム', prohibited_item: '禁止出品物', harassment: '嫌がらせ', fraud: '詐欺・不正', other: 'その他' };
+  var REASON_LABELS = {
+    spam: 'スパム', prohibited_item: '禁止出品物', harassment: '嫌がらせ', fraud: '詐欺・不正',
+    no_show: '待ち合わせに来ない', off_platform_payment: 'アプリ外での支払いの要求', inappropriate_icon: 'アイコンが不適切', other: 'その他',
+  };
   // キャンセルの理由(アプリの CancelReason と同じ 8 つ)
   var CANCEL_REASON_LABELS = {
     mutual_agreement: '双方が合意した', unreachable: '連絡が取れない', no_schedule: '日時が決まらない',
@@ -1904,11 +1907,12 @@
   var $ = function (id) { return document.getElementById(id); };
   var TARGET_LABELS = {
     listing: '出品', user: 'ユーザー', message: 'メッセージ', waitlist_message: 'オープンチャットの発言',
-    listing_comment: '商品ページのコメント',
+    listing_comment: '商品ページのコメント', review: '評価の一言',
   };
   var REMOVE_LABELS = {
     listing: 'この出品を削除する(出品者も元に戻せない)', message: 'このメッセージを削除する',
-    waitlist_message: 'この発言を削除する', listing_comment: 'このコメントを削除する', user: '',
+    waitlist_message: 'この発言を削除する', listing_comment: 'このコメントを削除する',
+    review: 'この一言を非表示にする(星の評価はそのまま)', user: 'アイコンの写真を外して、プリセットに戻す',
   };
   var CONVERSATION_NOTES = {
     message: '取引のメッセージ全体。赤い枠が通報されたメッセージで、左側が通報された人の発言です。',
@@ -2033,6 +2037,31 @@
       });
       box.appendChild(divWith('sub', CONVERSATION_NOTES[r.target_type]));
       box.appendChild(list);
+    } else if (r.target_type === 'review') {
+      var rv = json.review;
+      var rwrap = document.createElement('div');
+      rwrap.className = 'report-box';
+      if (!rv) {
+        rwrap.textContent = 'この評価は見つかりません(削除済み)。';
+      } else {
+        var rtext = divWith('', rv.comment || '(一言なし)');
+        rtext.style.whiteSpace = 'pre-wrap';
+        rwrap.appendChild(rtext);
+        rwrap.appendChild(divWith('sub', '星 ' + rv.rating + ' / ' + formatDateTime(rv.created_at) + (rv.hidden_at ? ' / 非表示中' : '')));
+      }
+      box.appendChild(rwrap);
+    } else if (r.target_type === 'user') {
+      var uwrap = document.createElement('div');
+      uwrap.className = 'report-box';
+      if (json.avatar_url) {
+        var avatar = document.createElement('img');
+        avatar.src = json.avatar_url; avatar.alt = 'アイコンの写真'; avatar.width = 128; avatar.height = 128;
+        avatar.style.borderRadius = '50%';
+        uwrap.appendChild(avatar);
+      } else {
+        uwrap.textContent = 'アイコンは写真ではありません(プリセット)。';
+      }
+      box.appendChild(uwrap);
     }
 
     var o = json.offender;
@@ -2063,7 +2092,7 @@
     }
 
     $('cdDecision').hidden = r.status !== 'open';
-    $('cdRemoveRow').hidden = r.target_type === 'user';
+    $('cdRemoveRow').hidden = r.target_type === 'user' && !json.avatar_url; // ユーザーは、写真のアイコンのときだけ外せる
     $('cdRemoveLabel').textContent = REMOVE_LABELS[r.target_type];
     $('cdBan').disabled = !o || o.is_banned;
   }
